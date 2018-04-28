@@ -46,7 +46,7 @@ db.serialize(function(){
 var client = new Twitter({
   consumer_key: process.env.TWITTER_KEY,
   consumer_secret: process.env.TWITTER_SECRET,
-  access_token_key: process.env.MY_KEY,
+  access_token_key: process.env.MY_TOKEN,
   access_token_secret: process.env.MY_SECRET
 });
 
@@ -54,14 +54,16 @@ var client = new Twitter({
 app.get("/", function (request, response) {
   var params = {screen_name: 'emojitetra'};
   console.log("Getting tweets...")
-  client.get('statuses/user_timeline', params, function(error, tweets, response) {
+  client.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
     if (!error) {
-      console.log(tweets);
-      response.json(tweets)
-    }
+      var last_tweet = db.
+      for(var tweet of tweets) {
+        
+      }
+   }
  else {
-      console.log(error)
-      response.json(error);
+      console.log(error);
+      response.json({"Twitter API Error": error});
     }  });
   //response.sendFile(__dirname + '/views/index.html');
 });
