@@ -45,6 +45,7 @@ app.get("/", function (request, response) {
 });
 
 app.get("/update", function (request, response) {
+  // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
   var params = {screen_name: 'emojitetra'};
   console.log("Getting tweets...");
   client.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
