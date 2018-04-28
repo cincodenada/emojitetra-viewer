@@ -44,10 +44,10 @@ db.serialize(function(){
 
 // init Twitter
 var client = new Twitter({
-  consumer_key: process.env.SECRET.TWITTER_KEY,
-  consumer_secret: process.env.SECRET.TWITTER_SECRET,
-  access_token_key: process.env.SECRET.MY_KEY,
-  access_token_secret: process.env.SECRET.MY_SECRET
+  consumer_key: process.env.TWITTER_KEY,
+  consumer_secret: process.env.TWITTER_SECRET,
+  access_token_key: process.env.MY_KEY,
+  access_token_secret: process.env.MY_SECRET
 });
 
 // http://expressjs.com/en/starter/basic-routing.html
@@ -56,7 +56,7 @@ app.get("/", function (request, response) {
   client.get('statuses/user_timeline', params, function(error, tweets, response) {
     if (!error) {
       console.log(tweets);
-      response.send(JSON.stringify(tweets))
+      response.json(tweets)
     }
   });
   //response.sendFile(__dirname + '/views/index.html');
@@ -79,3 +79,4 @@ app.get('/getDreams', function(request, response) {
 var listener = app.listen(process.env.PORT, function () {
   console.log('Your app is listening on port ' + listener.address().port);
 });
+;
