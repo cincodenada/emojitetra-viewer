@@ -49,22 +49,26 @@ app.get("/update", function (request, response) {
   console.log("Getting tweets...");
   client.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
     if (!error) {
-      var last_tweet = db.get("SELECT * FROM boards ORDER BY timestamp DESC LIMIT 1");
-      var last_timestamp = Date(last_tweet.timestamp);
-      console.log("Getting tweets from after " + last_timestamp);
-      var num_tweets = 0
-      for(var tweet of tweets) {
-        var tweet_timestamp = Date.parse(tweet.created_at);
-        console.log("Tweet timestamp: " + tweet_timestamp);
-        console.log("Last timestamp: " + last_timestamp);
-        if(tweet_timestamp <= last_tweet.timestamp) {
-          console.log("Got all new tweets!");
-          break;
+      db.get("SELECT * FROM boards ORDER BY timestamp DESC LIMIT 1", function(err, last_tweet) {
+        var last_timestamp = null;
+        if(last_tweet) {
+          last_timestamp = Date(last_tweet.timestamp);
         }
-        db.run("INSERT INTO boards VALUES(?,?,?,?)",tweet.id,tweet.text,tweet_timestamp,JSON.stringify(tweet))
-        num_tweets++;
-      }
-      response.send("Added " + num_tweets + " tweets")
+        console.log("Getting tweets from after " + last_timestamp);
+        var num_tweets = 0
+        for(var tweet of tweets) {
+          var tweet_timestamp = Date(tweet.created_at);
+          console.log("Tweet timestamp: " + tweet_timestamp);
+          console.log("Last timestamp: " + last_timestamp);
+          if(last_timestamp && tweet_timestamp <= last_timestamp) {
+            console.log("Got all new tweets!");
+            break;
+          }
+          db.run("INSERT INTO boards VALUES(?,?,?,?)",tweet.id,tweet.text,tweet_timestamp.getTime(),JSON.stringify(tweet))
+          num_tweets++;
+        }
+        response.send("Added " + num_tweets + " tweets")
+      });
    }
  else {
       console.log(error);
