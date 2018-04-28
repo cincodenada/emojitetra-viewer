@@ -53,12 +53,16 @@ var client = new Twitter({
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/", function (request, response) {
   var params = {screen_name: 'emojitetra'};
+  console.log("Getting tweets...")
   client.get('statuses/user_timeline', params, function(error, tweets, response) {
     if (!error) {
       console.log(tweets);
       response.json(tweets)
     }
-  });
+ else {
+      console.log(error)
+      response.json(error);
+    }  });
   //response.sendFile(__dirname + '/views/index.html');
 });
 
