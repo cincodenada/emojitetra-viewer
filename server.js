@@ -51,13 +51,14 @@ app.get("/update", function (request, response) {
     if (!error) {
       db.get("SELECT * FROM boards ORDER BY timestamp DESC LIMIT 1", function(err, last_tweet) {
         var last_timestamp = null;
+        console.log(last_tweet);
         if(last_tweet) {
-          last_timestamp = Date(last_tweet.timestamp);
+          last_timestamp = new Date(last_tweet.timestamp);
         }
         console.log("Getting tweets from after " + last_timestamp);
         var num_tweets = 0
         for(var tweet of tweets) {
-          var tweet_timestamp = Date(tweet.created_at);
+          var tweet_timestamp = new Date(tweet.created_at);
           console.log("Tweet timestamp: " + tweet_timestamp);
           console.log("Last timestamp: " + last_timestamp);
           if(last_timestamp && tweet_timestamp <= last_timestamp) {
