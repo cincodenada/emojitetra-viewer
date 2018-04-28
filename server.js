@@ -24,21 +24,8 @@ var db = new sqlite3.Database(dbFile);
 // if ./.data/sqlite.db does not exist, create it, otherwise print records to console
 db.serialize(function(){
   if (!exists) {
-    db.run('CREATE TABLE Dreams (dream TEXT)');
-    console.log('New table Dreams created!');
-    
-    // insert default dreams
-    db.serialize(function() {
-      db.run('INSERT INTO Dreams (dream) VALUES ("Find and count some sheep"), ("Climb a really tall mountain"), ("Wash the dishes")');
-    });
-  }
-  else {
-    console.log('Database "Dreams" ready to go!');
-    db.each('SELECT * from Dreams', function(err, row) {
-      if ( row ) {
-        console.log('record:', row);
-      }
-    });
+    db.run('CREATE TABLE boards (id BIGINT, board TEXT, timestamp INTEGER, json TEXT)');
+    console.log('New table boards created!');
   }
 });
 
@@ -53,13 +40,19 @@ var client = new Twitter({
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/", function (request, response) {
   var params = {screen_name: 'emojitetra'};
-  console.log("Getting tweets...")
+  console.log("Getting tweets...");
   client.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
     if (!error) {
-      var last_tweet = db.
+      var last_tweet = db.get("SELECT * FROM boards ORDER BY timestamp DESC LIMIT 1");
       for(var tweet of tweets) {
-        
+        var tweet_timestamp = Date.parse(tweet.created_at);
+        if(tweet_timestamp <= last_tweet) {
+          console.log("Got all new tweets!");
+          break;
+        }
+        db.run("INSERT INTO boards VALUES(?,?,?,?)",tweet.id,tweet_timestamp,JSON.stringify(tweet))
       }
+      response.json(tweets)
    }
  else {
       console.log(error);
