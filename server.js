@@ -38,7 +38,7 @@ var client = new Twitter({
 });
 
 // http://expressjs.com/en/starter/basic-routing.html
-app.get("/", function (request, response) {
+app.get("/boards", function (request, response) {
   db.all("SELECT id, board, timestamp FROM boards ORDER BY timestamp DESC", function(err, rows) {
     response.json(rows)
   })
@@ -79,17 +79,8 @@ app.get("/update", function (request, response) {
   //response.sendFile(__dirname + '/views/index.html');
 });
 
-app.get("/auth", function (request, response) {
+app.get("/", function (request, response) {
   response.sendFile(__dirname + '/views/index.html');
-});
-
-// endpoint to get all the dreams in the database
-// currently this is the only endpoint, ie. adding dreams won't update the database
-// read the sqlite3 module docs and try to add your own! https://www.npmjs.com/package/sqlite3
-app.get('/getDreams', function(request, response) {
-  db.all('SELECT * from Dreams', function(err, rows) {
-    response.send(JSON.stringify(rows));
-  });
 });
 
 // listen for requests :)
