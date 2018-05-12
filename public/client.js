@@ -1,6 +1,11 @@
 // client-side js
 // run by the browser each time your view template referencing it is loaded
 
+// Make modulo work like we want it to
+Number.prototype.mod = function(n) {
+    return ((this%n)+n)%n;
+};
+
 (function(){
   let boards = [];
   let curboard = 0;
@@ -19,7 +24,8 @@
   }
   
   const updateBoard = function() {
-    // iterate through every dream and add it to our page
+    curboard = curboard.mod(boards.length);
+    console.log(curboard);
     board.innerText = boards[curboard].board;
   }
   
@@ -30,13 +36,11 @@
   dreamRequest.send();
 
   prev.onclick = function(event) {
-    curboard -= 1;
-    curboard = curboard % boards.length;
+    curboard += 1;
     updateBoard();
   }
   next.onclick = function(event) {
-    curboard += 1;
-    curboard = curboard % boards.length;
+    curboard -= 1;
     updateBoard();
   }
 })()

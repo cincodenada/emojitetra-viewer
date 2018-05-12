@@ -12,7 +12,8 @@
   "dependencies": {
     "twitter": "^1.7.1",
     "express": "^4.16.3",
-    "sqlite3": "^4.0.0"
+    "sqlite3": "^4.0.0",
+    "emoji-js": "^3.4.0"
   },
   "engines": {
     "node": "8.x"

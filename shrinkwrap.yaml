@@ -1,4 +1,5 @@
 dependencies:
+  emoji-js: 3.4.0
   express: 4.16.3
   sqlite3: 4.0.0
   twitter: 1.7.1
@@ -200,6 +201,16 @@ packages:
     dev: false
     resolution:
       integrity: sha1-WQxhFWsK4vTwJVcyoViyZrxWsh0=
+  /emoji-datasource/4.0.0:
+    dev: false
+    resolution:
+      integrity: sha1-P8nAwvT7Mh2SkROIGfbRAGA9Pi8=
+  /emoji-js/3.4.0:
+    dependencies:
+      emoji-datasource: 4.0.0
+    dev: false
+    resolution:
+      integrity: sha1-2r3tpgyS0ZSKUXflG6lCHSApsFI=
   /encodeurl/1.0.2:
     dev: false
     engines:
@@ -729,6 +740,7 @@ registry: 'https://registry.npmjs.org/'
 shrinkwrapMinorVersion: 5
 shrinkwrapVersion: 3
 specifiers:
+  emoji-js: ^3.4.0
   express: ^4.16.3
   sqlite3: ^4.0.0
   twitter: ^1.7.1
