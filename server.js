@@ -2,7 +2,8 @@
 // where your node app starts
 
 // init project
-var http = require('http');
+var fs = require('fs');
+var https = require('https');
 var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
@@ -48,6 +49,7 @@ app.get("/boards", function (request, response) {
 app.get("/update", function (request, response) {
   // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
   var params = {screen_name: 'emojitetra'};
+  
   console.log("Getting tweets...");
   client.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
     if (!error) {
@@ -83,7 +85,7 @@ app.get("/update", function (request, response) {
 app.get("/auth", function (request, response) {
   let body = 'grant_type=client_credentials';
   let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
-  let authRequest = http.request({
+  let authRequest = https.request({
     hostname: 'api.twitter.com',
     path: '/oauth2/token',
     method: 'POST',
@@ -93,16 +95,26 @@ app.get("/auth", function (request, response) {
       'Authorization': 'Basic ' + auth.toString('base64'),
     }
   }, (res) => {
+    console.log("Got response...");
     let data = ""
     res.setEncoding('utf8');
     res.on('data', (chunk) => { data += chunk });
     res.on('end', () => {
-      response.write(data);
+      console.log("Finished response...");
+      fs.writeFile('token.json', data, (err) => {
+        if(err) {
+          console.log("Error saving token: " + err.code);
+          response.send(JSON.stringify(err));
+        } else {
+          response.send(data)
+        }
+      })
     });
   });
-  console.log("Requesting 
+  console.log("Requesting Twitter Auth...");
   authRequest.write('grant_type=client_credentials');
   authRequest.end();
+  console.log("Requested Twitter Auth...");
 });
 
 
