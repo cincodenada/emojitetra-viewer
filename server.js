@@ -81,7 +81,8 @@ app.get("/update", function (request, response) {
 });
 
 app.get("/auth", function (request, response) {
-  authRequest = http(
+  authRequest = http.post({
+    hostname: 
   response.sendFile(__dirname + '/views/index.html');
 });
 
