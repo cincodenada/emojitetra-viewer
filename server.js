@@ -45,7 +45,19 @@ var boards = new BoardStore(db, client);
 
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/boards", function (request, response) {
-  db.all("SELECT id, board, timestamp FROM boards ORDER BY timestamp DESC", function(err, rows) {
+  db.all("SELECT id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
+    for(var r of rows) {
+      var parsed = JSON.parse(r.poll_data);
+      if(parsed) {
+        var results = {}
+        for(var key of Object.keys(parsed)) {
+          if(key.substr(-5) == 'label') {
+            results[parsed[key]] = parsed[key.replace("_label","_count")];
+          }
+        }
+        r.poll_data = results;
+      }
+    }
     response.json(rows)
   })
 });
