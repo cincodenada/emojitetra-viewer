@@ -32,7 +32,7 @@ db.serialize(function(){
 });
 
 // init Twitter
-var token = JSON.parse(fs.readFileSync('token.json'))
+var token = JSON.parse(fs.readFileSync('./.data/token.json'))
 var client = new Twitter({
   consumer_key: process.env.TWITTER_KEY,
   consumer_secret: process.env.TWITTER_SECRET,
@@ -82,6 +82,33 @@ app.get("/update", function (request, response) {
   //response.sendFile(__dirname + '/views/index.html');
 });
 
+app.get("/invalidate", function(request, response) {
+  let body = 'access_token=' + token.access_token;
+  let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
+  let authRequest = https.request({
+    hostname: 'api.twitter.com',
+    path: '/oauth2/invalidate_token',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Authorization': 'Basic ' + auth.toString('base64'),
+    }
+  }, (res) => {
+    console.log("Got response...");
+    let data = ""
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => { data += chunk });
+    res.on('end', () => {
+        response.send(data)
+    });
+  });
+  console.log("Requesting Twitter Auth...");
+  authRequest.write(body);
+  authRequest.end();
+  console.log("Requested Twitter Auth...");
+})
+
 app.get("/auth", function (request, response) {
   let body = 'grant_type=client_credentials';
   let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
@@ -101,7 +128,7 @@ app.get("/auth", function (request, response) {
     res.on('data', (chunk) => { data += chunk });
     res.on('end', () => {
       console.log("Finished response...");
-      fs.writeFile('token.json', data, (err) => {
+      fs.writeFile('./.data/token.json', data, (err) => {
         if(err) {
           console.log("Error saving token: " + err.code);
           response.send(JSON.stringify(err));
