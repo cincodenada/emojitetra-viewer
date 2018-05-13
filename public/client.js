@@ -30,32 +30,41 @@ Number.prototype.mod = function(n) {
     do {
       curboard += dir;
       curboard = curboard.mod(boards.length);
-      console.log("Checking " + curboard)
+      //console.log("Checking " + curboard)
     } while(!board_re.test(boards[curboard].board) && curboard != orig_board)
     console.log(curboard);
     board.innerText = boards[curboard].board;
     votes.innerHTML = "";
     var poll = boards[curboard].poll_data;
     var total = 0;
-    for(var choice of Object.keys(poll)) {
-      total += parseInt(poll[choice]);
-    }
-    for(var choice of Object.keys(poll)) {
-      var val = poll[choice];
-      var percent = val/total;
-      var key = choice[0];
-      var row = document.createElement('div');
-      var icon = document.createElement('span');
-      icon.className = 'vote_icon';
-      icon.innerText = key;
-      var bar = document.createElement('div');
-      bar.style.width = 5*percent + "em";
-      bar.className = "vote_bar";
+    var winner = 0;
+    if(poll) {
+      for(var choice of Object.keys(poll)) {
+        var num = parseInt(poll[choice]); 
+        total += num;
+        winner = Math.max(winner, num);
+      }
+      for(var choice of Object.keys(poll)) {
+        var val = poll[choice];
+        var percent = val/total;
+        var key = choice[0];
+        var row = document.createElement('div');
+        var icon = document.createElement('span');
+        icon.className = 'vote_icon';
+        icon.innerText = key;
+        var bar = document.createElement('div');
+        bar.style.width = 5*percent + "em";
+        if(val == winner) {
+          bar.className = "vote_bar winner";
+        } else {
+          bar.className = "vote_bar";
+        }
 
-      row.appendChild(icon);
-      row.appendChild(bar);
-      row.appendChild(document.createTextNode(val));
-      votes.appendChild(row)
+        row.appendChild(icon);
+        row.appendChild(bar);
+        row.appendChild(document.createTextNode(val));
+        votes.appendChild(row)
+      }
     }
   }
   
