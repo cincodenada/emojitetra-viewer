@@ -27,7 +27,7 @@ var db = new sqlite3.Database(dbFile);
 // if ./.data/sqlite.db does not exist, create it, otherwise print records to console
 db.serialize(function(){
   if (!exists) {
-    db.run('CREATE TABLE boards (id BIGINT, board TEXT, timestamp INTEGER, json TEXT)');
+    db.run('CREATE TABLE boards (id BIGINT, board TEXT, timestamp INTEGER, json TEXT, poll_data TEXT)');
     console.log('New table boards created!');
   }
 });

@@ -84,15 +84,17 @@ module.exports = class BoardStore {
   storeTweet(tweet) {
     var tweet_timestamp = new Date(tweet.created_at);
     var poll_data = {}
-    for(var key of Object.keys(tweet.card.binding_values)) {
-      var val = tweet.card.binding_values[key];
-      switch(val.type) {
-        case 'STRING':
-          poll_data[key] = val.string_value;
-          break;
-        case 'BOOLEAN':
-          poll_data[key] = val.boolean_value;
-          break;
+    if(tweet.card) {
+      for(var key of Object.keys(tweet.card.binding_values)) {
+        var val = tweet.card.binding_values[key];
+        switch(val.type) {
+          case 'STRING':
+            poll_data[key] = val.string_value;
+            break;
+          case 'BOOLEAN':
+            poll_data[key] = val.boolean_value;
+            break;
+        }
       }
     }
     this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),JSON.stringify(tweet),JSON.stringify(poll_data));

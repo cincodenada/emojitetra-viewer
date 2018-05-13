@@ -71,6 +71,7 @@ footer {
 }
 
 #current { display: flex; }
+#date { line-height: 2em; }
 
 #next_votes {
   margin-left: 5px;
