@@ -78,8 +78,14 @@ footer {
   border-left: 1px solid black;
 }
 
+.vote_icon {
+  min-width: 1.5em;
+  display: inline-block;
+}
 .vote_bar {
   display: inline-block;
   background: lightblue;
-  padding: 0px 2px;
+  height: 1em;
+  vertical-align: text-bottom;
+  margin-right: 0.5em;
 }

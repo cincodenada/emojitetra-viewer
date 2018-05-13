@@ -43,13 +43,16 @@ Number.prototype.mod = function(n) {
     for(var choice of Object.keys(poll)) {
       var val = poll[choice];
       var percent = val/total;
-      var icon = choice[0];
+      var key = choice[0];
       var row = document.createElement('div');
-      row.innerText = icon;
+      var icon = document.createElement('span');
+      icon.className = 'vote_icon';
+      icon.innerText = key;
       var bar = document.createElement('div');
-      bar.style.height = "1em";
       bar.style.width = 5*percent + "em";
       bar.className = "vote_bar";
+
+      row.appendChild(icon);
       row.appendChild(bar);
       row.appendChild(document.createTextNode(val));
       votes.appendChild(row)
