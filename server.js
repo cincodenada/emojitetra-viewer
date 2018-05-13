@@ -2,6 +2,7 @@
 // where your node app starts
 
 // init project
+var http = require('http');
 var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
@@ -77,6 +78,11 @@ app.get("/update", function (request, response) {
       response.json({"Twitter API Error": error});
     }  });
   //response.sendFile(__dirname + '/views/index.html');
+});
+
+app.get("/auth", function (request, response) {
+  authRequest = http(
+  response.sendFile(__dirname + '/views/index.html');
 });
 
 app.get("/", function (request, response) {
