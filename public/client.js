@@ -6,14 +6,18 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
 };
 
+let play_delay = 1000;
+
 (function(){
   let boards = [];
   let curboard = 0;
+  let play_timeout = null;
   
   // define variables that reference elements on our page
   const board = document.getElementById('board');
   const votes = document.getElementById('votes');
   const prev = document.getElementById('prev');
+  const play = document.getElementById('play');
   const next = document.getElementById('next');
   const date = document.getElementById('date');
   const board_re = RegExp('^\\d+');
@@ -48,11 +52,13 @@ Number.prototype.mod = function(n) {
   const updateBoard = function(dir) {
     let orig_board = curboard;
     do {
-      curboard += dir;
+      // Minus cause they're sorted DESC
+      // And I want +1 to step forward in time
+      curboard -= dir;
       curboard = curboard.mod(boards.length);
       //console.log("Checking " + curboard)
     } while(!board_re.test(boards[curboard].board) && curboard != orig_board)
-    console.log(curboard);
+    //console.log(curboard);
     board.innerText = boards[curboard].board;
     var tweet_date = new Date(boards[curboard].timestamp)
     date.innerText = tweet_date;
@@ -74,6 +80,11 @@ Number.prototype.mod = function(n) {
     }
   }
   
+  const play_step = function() {
+    updateBoard(1);
+    play_timeout = setTimeout(play_step, play_delay);
+  }
+  
   // request the dreams from our app's sqlite database
   const dreamRequest = new XMLHttpRequest();
   dreamRequest.onload = updateBoards;
@@ -81,9 +92,14 @@ Number.prototype.mod = function(n) {
   dreamRequest.send();
 
   prev.onclick = function(event) {
-    updateBoard(1);
+    clearTimeout(play_timeout);
+    updateBoard(-1);
+  }
+  play.onclick = function(event) {
+    play_step();
   }
   next.onclick = function(event) {
-    updateBoard(-1);
+    clearTimeout(play_timeout);
+    updateBoard(1);
   }
 })()
