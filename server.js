@@ -81,10 +81,30 @@ app.get("/update", function (request, response) {
 });
 
 app.get("/auth", function (request, response) {
-  authRequest = http.post({
-    hostname: 
-  response.sendFile(__dirname + '/views/index.html');
+  let body = 'grant_type=client_credentials';
+  let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
+  let authRequest = http.request({
+    hostname: 'api.twitter.com',
+    path: '/oauth2/token',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Authorization': 'Basic ' + auth.toString('base64'),
+    }
+  }, (res) => {
+    let data = ""
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => { data += chunk });
+    res.on('end', () => {
+      response.write(data);
+    });
+  });
+  console.log("Requesting 
+  authRequest.write('grant_type=client_credentials');
+  authRequest.end();
 });
+
 
 app.get("/", function (request, response) {
   response.sendFile(__dirname + '/views/index.html');
@@ -94,4 +114,3 @@ app.get("/", function (request, response) {
 var listener = app.listen(process.env.PORT, function () {
   console.log('Your app is listening on port ' + listener.address().port);
 });
-;
