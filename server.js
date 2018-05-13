@@ -32,11 +32,11 @@ db.serialize(function(){
 });
 
 // init Twitter
+var token = JSON.parse(fs.readFileSync('token.json'))
 var client = new Twitter({
   consumer_key: process.env.TWITTER_KEY,
   consumer_secret: process.env.TWITTER_SECRET,
-  access_token_key: process.env.MY_TOKEN,
-  access_token_secret: process.env.MY_SECRET
+  bearer_token: token.access_token,
 });
 
 // http://expressjs.com/en/starter/basic-routing.html
