@@ -69,3 +69,17 @@ footer {
   padding-top: 25px;
   border-top: 1px solid lightgrey;
 }
+
+#current { display: flex; }
+
+#next_votes {
+  margin-left: 5px;
+  padding-left: 5px;
+  border-left: 1px solid black;
+}
+
+.vote_bar {
+  display: inline-block;
+  background: lightblue;
+  padding: 0px 2px;
+}

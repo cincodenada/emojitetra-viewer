@@ -12,6 +12,7 @@ Number.prototype.mod = function(n) {
   
   // define variables that reference elements on our page
   const board = document.getElementById('board');
+  const votes = document.getElementById('votes');
   const prev = document.getElementById('prev');
   const next = document.getElementById('next');
   const board_re = RegExp('^\\d+');
@@ -33,6 +34,26 @@ Number.prototype.mod = function(n) {
     } while(!board_re.test(boards[curboard].board) && curboard != orig_board)
     console.log(curboard);
     board.innerText = boards[curboard].board;
+    votes.innerHTML = "";
+    var poll = boards[curboard].poll_data;
+    var total = 0;
+    for(var choice of Object.keys(poll)) {
+      total += parseInt(poll[choice]);
+    }
+    for(var choice of Object.keys(poll)) {
+      var val = poll[choice];
+      var percent = val/total;
+      var icon = choice[0];
+      var row = document.createElement('div');
+      row.innerText = icon;
+      var bar = document.createElement('div');
+      bar.style.height = "1em";
+      bar.style.width = 5*percent + "em";
+      bar.className = "vote_bar";
+      row.appendChild(bar);
+      row.appendChild(document.createTextNode(val));
+      votes.appendChild(row)
+    }
   }
   
   // request the dreams from our app's sqlite database
