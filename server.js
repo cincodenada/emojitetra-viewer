@@ -60,6 +60,14 @@ app.get("/update", function (request, response) {
   })
 });
 
+
+app.get("/details/:id", function (request, response) {
+  // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
+  var res = boards.getDetails(request.params.id, (tweet) => {
+    response.json(tweet);
+  })
+});
+
 app.get("/invalidate", function(request, response) {
   let body = 'access_token=' + token.access_token;
   let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
