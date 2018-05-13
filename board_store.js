@@ -40,14 +40,19 @@ module.exports = class BoardStore {
         var last_tweet_id = null
         for(var tweet of tweets) {
           var tweet_timestamp = new Date(tweet.created_at);
-          console.log("Current tweet: " + tweet.id + " @ " + tweet_timestamp);
+          console.log("Current tweet: " + tweet.id_str + " @ " + tweet_timestamp);
           // If we hit our last tweet, dump out
-          if(from_id && tweet.id <= from_id) {
+          if(from_id && tweet.id_str <= from_id) {
             console.log("Got all new tweets!");
-            cb(null)
-            return
+            cb(null);
+            return;
+          } else if(tweet.id_str == to_id) {
+            // Don't try to double-add the end tweet
+            continue;
           }
-          self.db.run("INSERT INTO boards VALUES(?,?,?,?)",tweet.id,tweet.text,tweet_timestamp.getTime(),JSON.stringify(tweet))
+          self.getDetails(tweet.id_str, (fulltweet) => {
+            self.storeTweet(fulltweet);
+          })
           num_tweets++;
           last_tweet_id = tweet.id;
         }
@@ -63,6 +68,34 @@ module.exports = class BoardStore {
         cb(error);
       }
     });
+  }
+  
+  getDetails(tweet_id, cb) {
+    console.log("Getting details...");
+    var params = {
+      'include_cards': 1,
+      'cards_platform': 'iPhone-13',
+    };
+    this.twitter.get('statuses/show/' + tweet_id + '.json', params, function(error, tweets, twitter_response) {
+      cb(tweets)
+    });
+  }
+  
+  storeTweet(tweet) {
+    var tweet_timestamp = new Date(tweet.created_at);
+    var poll_data = {}
+    for(var key of Object.keys(tweet.card.binding_values)) {
+      var val = tweet.card.binding_values[key];
+      switch(val.type) {
+        case 'STRING':
+          poll_data[key] = val.string_value;
+          break;
+        case 'BOOLEAN':
+          poll_data[key] = val.boolean_value;
+          break;
+      }
+    }
+    this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),JSON.stringify(tweet),JSON.stringify(poll_data));
   }
 }
 
