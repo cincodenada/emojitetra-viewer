@@ -89,3 +89,6 @@ footer {
   vertical-align: text-bottom;
   margin-right: 0.5em;
 }
+.vote_bar.winner {
+  background: gold;
+}
