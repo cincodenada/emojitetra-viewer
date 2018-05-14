@@ -14,8 +14,8 @@ var emoji = new EmojiConvertor();
   let curboard = 0;
   let play_timeout = null;
   
-  emoji.img_sets.google.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_google_64.png?1526256436974";
-  emoji.img_set = "google";
+  emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
+  emoji.img_set = "twitter";
   emoji.use_sheet = true;
   
   // define variables that reference elements on our page
@@ -40,8 +40,8 @@ var emoji = new EmojiConvertor();
     var row = document.createElement('div');
     var icon = document.createElement('span');
     icon.className = 'vote_icon';
-    //icon.innerHTML = emoji.replace_unified(label);
-    icon.innerHTML = label;
+    //icon.innerHTML = label;
+    icon.innerHTML = emoji.replace_unified(label);
     var bar = document.createElement('div');
     bar.style.width = 5*percent + "em";
     if(is_winner) {
@@ -81,7 +81,7 @@ var emoji = new EmojiConvertor();
       }
       for(var choice of Object.keys(poll)) {
         var val = poll[choice];
-        var voterow = buildPollElement(choice[0], val/total, val, val==winner);
+        var voterow = buildPollElement(choice.substr(0,choice.indexOf(" ")), val/total, val, val==winner);
         votes.appendChild(voterow);
       }
     }
