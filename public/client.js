@@ -7,13 +7,19 @@ Number.prototype.mod = function(n) {
 };
 
 let play_delay = 1000;
+var emoji = new EmojiConvertor();
 
 (function(){
   let boards = [];
   let curboard = 0;
   let play_timeout = null;
   
+  emoji.img_sets.google.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_google_64.png?1526256436974";
+  emoji.img_set = "google";
+  emoji.use_sheet = true;
+  
   // define variables that reference elements on our page
+  const container = document.getElementById('current');
   const board = document.getElementById('board');
   const votes = document.getElementById('votes');
   const prev = document.getElementById('prev');
@@ -34,7 +40,8 @@ let play_delay = 1000;
     var row = document.createElement('div');
     var icon = document.createElement('span');
     icon.className = 'vote_icon';
-    icon.innerText = label;
+    //icon.innerHTML = emoji.replace_unified(label);
+    icon.innerHTML = label;
     var bar = document.createElement('div');
     bar.style.width = 5*percent + "em";
     if(is_winner) {
@@ -78,6 +85,8 @@ let play_delay = 1000;
         votes.appendChild(voterow);
       }
     }
+    
+    board.innerHTML = emoji.replace_unified(board.innerHTML);
   }
   
   const play_step = function() {
