@@ -33,6 +33,9 @@ db.serialize(function(){
 });
 
 // init Twitter
+// Uses the following publically-available keys for Twitter for iPhone:
+//TWITTER_KEY=IQKbtAYlXLripLGPWd0HUA
+//TWITTER_SECRET=GgDYlkSvaPxGxC4X8liwpUoqKwwr3lCADbz8A7ADU
 var token = JSON.parse(fs.readFileSync('./.data/token.json'))
 var client = new Twitter({
   consumer_key: process.env.TWITTER_KEY,
