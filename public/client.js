@@ -11,6 +11,7 @@ var emoji = new EmojiConvertor();
 
 (function(){
   let boards = [];
+  let labels = ["⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
   let curboard = 0;
   let play_timeout = null;
   
@@ -31,9 +32,10 @@ var emoji = new EmojiConvertor();
   // a helper function to call when our request for dreams is done
   const updateBoards = function() {
     // parse our response to convert to JSON
-    boards = JSON.parse(this.responseText);
+    var board_info = JSON.parse(this.responseText);
+    boards = board_info.boards;
     console.log(boards);
-    updateBoard(0);
+    updateBoard(-1, true);
   }
   
   const buildPollElement = function(label, percent, val, is_winner) {
@@ -56,19 +58,31 @@ var emoji = new EmojiConvertor();
     return row
   }
   
-  const updateBoard = function(dir) {
+  const updateBoard = function(dir, first_load) {
     let orig_board = curboard;
-    do {
+    if(first_load) { 
+      orig_board = orig_board + dir;
+      orig_board = orig_board.mod(boards.length);
+    } else {
+      curboard -= dir;
+      curboard = curboard.mod(boards.length);
+    }
+    while(!board_re.test(boards[curboard].board) && curboard != orig_board) {
       // Minus cause they're sorted DESC
       // And I want +1 to step forward in time
       curboard -= dir;
       curboard = curboard.mod(boards.length);
       //console.log("Checking " + curboard)
-    } while(!board_re.test(boards[curboard].board) && curboard != orig_board)
+    }
     //console.log(curboard);
     board.innerText = boards[curboard].board;
     var tweet_date = new Date(boards[curboard].timestamp)
-    date.innerText = tweet_date;
+    var date_link = document.createElement('a');
+    date_link.innerText = tweet_date;
+    date_link.target = "_blank";
+    date_link.href = "https://twitter.com/EmojiTetra/status/" + boards[curboard].id;
+    date.innerHTML = "";
+    date.appendChild(date_link);
     votes.innerHTML = "";
     var poll = boards[curboard].poll_data;
     var total = 0;
@@ -79,8 +93,8 @@ var emoji = new EmojiConvertor();
         total += num;
         winner = Math.max(winner, num);
       }
-      for(var choice of Object.keys(poll)) {
-        var val = poll[choice];
+      for(var choice of labels) {
+        var val = poll[choice] || 0;
         var voterow = buildPollElement(choice.substr(0,choice.indexOf(" ")), val/total, val, val==winner);
         votes.appendChild(voterow);
       }

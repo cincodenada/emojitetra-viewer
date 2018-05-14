@@ -45,33 +45,54 @@ var client = new Twitter({
 
 // init BoardStore
 var boards = new BoardStore(db, client);
+var board_cache = './.data/board_cache.json';
+var board_precache = './.data/board_precache.json';
+
 
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/boards", function (request, response) {
-  db.all("SELECT id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
+  try {
+    fs.statSync(board_cache);
+    response.sendFile(__dirname + '/' + board_cache);
+    return
+  } catch(e) {}
+
+  db.all("SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
+    var all_opts = {};
     for(var r of rows) {
       var parsed = JSON.parse(r.poll_data);
       if(parsed) {
         var results = {}
         for(var key of Object.keys(parsed)) {
           if(key.substr(-5) == 'label') {
-            results[parsed[key]] = parsed[key.replace("_label","_count")];
+            var label = parsed[key] 
+            results[label] = parsed[key.replace("_label","_count")];
+            all_opts[label] = true;
           }
         }
         r.poll_data = results;
       }
     }
-    response.json(rows)
+        /*
+        */
+    var board_info = {
+      boards: rows,
+      options: Object.keys(all_opts),
+    };
+    fs.writeFile(board_cache, JSON.stringify(board_info));
+    response.json(board_info);
   })
 });
 
 app.get("/update", function (request, response) {
-  // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
-  var res = boards.update({
+  boards.update({
     screen_name: 'emojitetra',
     count: 200,
   }, (resp) => {
-    response.send(resp);                     
+    console.log(resp);
+    fs.unlink(board_cache, (err) => {
+      response.json(resp);
+    })
   })
 });
 
