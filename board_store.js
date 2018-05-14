@@ -6,7 +6,7 @@ module.exports = class BoardStore {
   
   update(params, cb) {
     var last_id = null;
-    this.db.get("SELECT * FROM boards ORDER BY timestamp DESC LIMIT 1", (err, last_tweet) => {
+    this.db.get("SELECT CAST(id AS TEXT) as id, timestamp FROM boards ORDER BY timestamp DESC LIMIT 1", (err, last_tweet) => {
       if(err) { console.err("Couldn't get last tweet: " + err); }
       
       if(last_tweet) {
@@ -36,18 +36,21 @@ module.exports = class BoardStore {
     if(from_id) { params['since_id'] = from_id; }
     self.twitter.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
       if (!error) {
-        var num_tweets = 0
-        var last_tweet_id = null
+        var num_tweets = 0;
+        var ignored_tweets = 0;
+        var last_tweet_id = null;
         for(var tweet of tweets) {
           var tweet_timestamp = new Date(tweet.created_at);
           console.log("Current tweet: " + tweet.id_str + " @ " + tweet_timestamp);
           // If we hit our last tweet, dump out
           if(from_id && tweet.id_str <= from_id) {
             console.log("Got all new tweets!");
-            cb(null);
+            cb(null, prev_count+num_tweets-ignored_tweets);
             return;
           } else if(tweet.id_str == to_id) {
             // Don't try to double-add the end tweet
+            console.log("Not storing already-seen tweet");
+            ignored_tweets++;
             continue;
           }
           self.getDetails(tweet.id_str, (fulltweet) => {
@@ -57,7 +60,7 @@ module.exports = class BoardStore {
           last_tweet_id = tweet.id;
         }
 
-        var total_tweets = prev_count + num_tweets;
+        var total_tweets = prev_count + num_tweets - ignored_tweets;
         if(num_tweets) {
           // Down the rabbit hole, time to get more...
           self.getTweets(from_id, last_tweet_id, params, cb, self, total_tweets);
@@ -96,8 +99,15 @@ module.exports = class BoardStore {
             break;
         }
       }
+      if(poll_data.counts_are_final === false) {
+        // Don't store partial boards
+        console.log("Not storing partial poll...")
+        return false;
+      }
     }
+    console.log("Saving tweet " + tweet.id_str);
     this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),JSON.stringify(tweet),JSON.stringify(poll_data));
+    return true;
   }
 }
 
