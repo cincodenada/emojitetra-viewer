@@ -116,33 +116,52 @@ module.exports = class BoardStore {
   
   getBoards(cb) {
     this.db.all("SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
-      var all_opts = {};
+      var boards = [];
       for(var r of rows) {
-        var parsed = JSON.parse(r.poll_data);
-        if(parsed) {
-          var results = {}
-          for(var key of Object.keys(parsed)) {
-            if(key.substr(-5) == 'label') {
-              var label = parsed[key] 
-              results[label] = parsed[key.replace("_label","_count")];
-              all_opts[label] = true;
-            }
-          }
-          r.poll_data = results;
-        }
+        var cur_board = new Board(r);
+        if(cur_board.score !== null) { boards.push(cur_board) };
       }
-          /*
-          */
-      cb({
-        boards: rows,
-        options: Object.keys(all_opts),
-      })
+      cb(boards)
     })
   }
 }
 
+const board_re = [
+  RegExp('^(\\d\\S+)'),
+  RegExp('Score (\\d+)'),
+]
+
 class Board {
-  constructor(board_text) {
-    this.raw = board_text
+  constructor(board_info) {
+    this.board = board_info.board;
+    this.id = BigInt(board_info.id);
+    this.timestamp = board_info.timestamp;
+    this.parsePoll(board_info.poll_data);
+    this.parseScore()
+  }
+  
+  parsePoll(poll_json) {
+    var parsed = JSON.parse(poll_json);
+    if(parsed) {
+      var results = {};
+      for(var key of Object.keys(parsed)) {
+        if(key.substr(-5) == 'label') {
+          var label = parsed[key];
+          results[label] = parsed[key.replace("_label","_count")];
+        }
+      }
+      this.poll_data = results;
+    }
+  }
+  
+  parseScore() {
+    this.score = null;
+    for(var idx in board_re) {
+      var re = board_re[idx];
+      var matches = re.exec(this.board);
+      if(matches) {
+        this.score = parseInt(matches[1].replace(/\D/g,""));
+      }
+    }
   }
 }
