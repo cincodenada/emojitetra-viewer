@@ -1,3 +1,5 @@
+var BigInt = require("big-integer");
+
 module.exports = class BoardStore {
   constructor(db, twitter) { 
     this.db = db; 
@@ -30,7 +32,8 @@ module.exports = class BoardStore {
   getTweets(from_id, to_id, params, cb, self, prev_count) {
     if(!self) { self = this; }
     if(!prev_count) { prev_count = 0; }
-    
+    var from_id = BigInt(from_id)
+    var to_id = BigInt(to_id)
     console.log("Getting tweets from " + from_id + " to "  + to_id + "...");
     if(to_id) { params['max_id'] = to_id; }
     if(from_id) { params['since_id'] = from_id; }
@@ -40,10 +43,11 @@ module.exports = class BoardStore {
         var ignored_tweets = 0;
         var last_tweet_id = null;
         for(var tweet of tweets) {
+          var cur_id = BigInt(tweet.id_str)
           var tweet_timestamp = new Date(tweet.created_at);
           console.log("Current tweet: " + tweet.id_str + " @ " + tweet_timestamp);
           // If we hit our last tweet, dump out
-          if(from_id && tweet.id_str <= from_id) {
+          if(from_id && cur_id <= from_id) {
             console.log("Got all new tweets!");
             cb(null, prev_count+num_tweets-ignored_tweets);
             return;
@@ -109,7 +113,36 @@ module.exports = class BoardStore {
     this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),JSON.stringify(tweet),JSON.stringify(poll_data));
     return true;
   }
+  
+  getBoards(cb) {
+    this.db.all("SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
+      var all_opts = {};
+      for(var r of rows) {
+        var parsed = JSON.parse(r.poll_data);
+        if(parsed) {
+          var results = {}
+          for(var key of Object.keys(parsed)) {
+            if(key.substr(-5) == 'label') {
+              var label = parsed[key] 
+              results[label] = parsed[key.replace("_label","_count")];
+              all_opts[label] = true;
+            }
+          }
+          r.poll_data = results;
+        }
+      }
+          /*
+          */
+      cb({
+        boards: rows,
+        options: Object.keys(all_opts),
+      })
+    })
+  }
 }
 
 class Board {
+  constructor(board_text) {
+    this.raw = board_text
+  }
 }

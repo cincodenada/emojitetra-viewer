@@ -11,7 +11,8 @@ var emoji = new EmojiConvertor();
 
 (function(){
   let boards = [];
-  let labels = ["⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
+  let labels = ["↔️ Left or Right","⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
+  let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
   let curboard = 0;
   let play_timeout = null;
   
@@ -27,7 +28,10 @@ var emoji = new EmojiConvertor();
   const play = document.getElementById('play');
   const next = document.getElementById('next');
   const date = document.getElementById('date');
-  const board_re = RegExp('^\\d+');
+  const board_re = [
+    RegExp('^(\\d+)'),
+    RegExp('Score (\\d+)'),
+  ]
   
   // a helper function to call when our request for dreams is done
   const updateBoards = function() {
@@ -38,15 +42,17 @@ var emoji = new EmojiConvertor();
     updateBoard(-1, true);
   }
   
-  const buildPollElement = function(label, percent, val, is_winner) {
+  const buildPollElement = function(label, percent, val, rank) {
+    if(!rank) { rank = 0 }
     var row = document.createElement('div');
     var icon = document.createElement('span');
     icon.className = 'vote_icon';
     //icon.innerHTML = label;
+    label = rank_icons[rank] + label
     icon.innerHTML = emoji.replace_unified(label);
     var bar = document.createElement('div');
     bar.style.width = 5*percent + "em";
-    if(is_winner) {
+    if(rank === 1) {
       bar.className = "vote_bar winner";
     } else {
       bar.className = "vote_bar";
@@ -67,7 +73,13 @@ var emoji = new EmojiConvertor();
       curboard -= dir;
       curboard = curboard.mod(boards.length);
     }
-    while(!board_re.test(boards[curboard].board) && curboard != orig_board) {
+    while(curboard != orig_board) {
+      var is_valid = false;
+      for(var idx in board_re) {
+        var re = board_re[idx];
+        is_valid |= re.test(boards[curboard].board);
+      }
+      if(is_valid) { break; }
       // Minus cause they're sorted DESC
       // And I want +1 to step forward in time
       curboard -= dir;
@@ -88,14 +100,26 @@ var emoji = new EmojiConvertor();
     var total = 0;
     var winner = 0;
     if(poll) {
+      var choices = Object.keys(poll);
+      var vals = [];
       for(var choice of Object.keys(poll)) {
         var num = parseInt(poll[choice]); 
+        vals.push(num);
         total += num;
-        winner = Math.max(winner, num);
+      }
+      vals.sort(function(a,b){return b-a});
+      var ranks = {}
+      var cur_rank = 0;
+      var cur_idx = 0;
+      var last_val;
+      for(var val of vals) {
+        cur_idx += 1
+        if(val !== last_val) { cur_rank = cur_idx }
+        ranks[val] = cur_rank;
       }
       for(var choice of labels) {
         var val = poll[choice] || 0;
-        var voterow = buildPollElement(choice.substr(0,choice.indexOf(" ")), val/total, val, val==winner);
+        var voterow = buildPollElement(choice.substr(0,choice.indexOf(" ")), val/total, val, ranks[val]);
         votes.appendChild(voterow);
       }
     }

@@ -56,31 +56,10 @@ app.get("/boards", function (request, response) {
     response.sendFile(__dirname + '/' + board_cache);
     return
   } catch(e) {}
-
-  db.all("SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
-    var all_opts = {};
-    for(var r of rows) {
-      var parsed = JSON.parse(r.poll_data);
-      if(parsed) {
-        var results = {}
-        for(var key of Object.keys(parsed)) {
-          if(key.substr(-5) == 'label') {
-            var label = parsed[key] 
-            results[label] = parsed[key.replace("_label","_count")];
-            all_opts[label] = true;
-          }
-        }
-        r.poll_data = results;
-      }
-    }
-        /*
-        */
-    var board_info = {
-      boards: rows,
-      options: Object.keys(all_opts),
-    };
-    fs.writeFile(board_cache, JSON.stringify(board_info));
-    response.json(board_info);
+  
+  boards.getBoards(function(boards) {
+    fs.writeFile(board_cache, JSON.stringify(boards));
+    response.json(boards);
   })
 });
 

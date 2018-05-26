@@ -1,4 +1,5 @@
 dependencies:
+  big-integer: 1.6.28
   express: 4.16.3
   sqlite3: 4.0.0
   twitter: 1.7.1
@@ -54,6 +55,12 @@ packages:
     optional: true
     resolution:
       integrity: sha1-Y7xdy2EzG5K8Bf1SiVPDNGKgb40=
+  /big-integer/1.6.28:
+    dev: false
+    engines:
+      node: '>=0.6'
+    resolution:
+      integrity: sha512-OJT3rzgtsYca/5WmmEuFJDPMwROVh5SSjoEX9wIrpfbbWJ4KqRzShs8Cj6jWHaatBYAeWngBA+kmmrcHSklT1g==
   /body-parser/1.18.2:
     dependencies:
       bytes: 3.0.0
@@ -726,9 +733,10 @@ packages:
     resolution:
       integrity: sha1-OhBcoXBTr1XW4nDB+CiGguGNpAA=
 registry: 'https://registry.npmjs.org/'
-shrinkwrapMinorVersion: 5
+shrinkwrapMinorVersion: 6
 shrinkwrapVersion: 3
 specifiers:
+  big-integer: ^1.6.28
   express: ^4.16.3
   sqlite3: ^4.0.0
   twitter: ^1.7.1
