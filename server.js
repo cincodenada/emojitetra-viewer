@@ -45,18 +45,18 @@ var client = new Twitter({
 
 // init BoardStore
 var boards = new BoardStore(db, client);
-var board_cache = './.data/board_cache.json';
-var board_precache = './.data/board_precache.json';
-
+const board_cache = './.data/board_cache.json';
+const board_precache = './.data/board_precache.json';
 
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/boards", function (request, response) {
-  try {
-    fs.statSync(board_cache);
-    response.sendFile(__dirname + '/' + board_cache);
-    return
-  } catch(e) {}
-  
+  if(!request.query.force) {
+    try {
+      fs.statSync(board_cache);
+      response.sendFile(__dirname + '/' + board_cache);
+      return
+    } catch(e) {}
+  }
   boards.getBoards(function(boards) {
     fs.writeFile(board_cache, JSON.stringify(boards));
     response.json(boards);

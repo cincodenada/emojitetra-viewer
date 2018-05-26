@@ -15,6 +15,8 @@ var emoji = new EmojiConvertor();
   let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
   let curboard = 0;
   let play_timeout = null;
+  var starts = [];
+  var final_scores = [];
   
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
   emoji.img_set = "twitter";
@@ -24,9 +26,11 @@ var emoji = new EmojiConvertor();
   const container = document.getElementById('current');
   const board = document.getElementById('board');
   const votes = document.getElementById('votes');
+  const prevStart = document.getElementById('prevStart');
   const prev = document.getElementById('prev');
   const play = document.getElementById('play');
   const next = document.getElementById('next');
+  const nextStart = document.getElementById('nextStart');
   const date = document.getElementById('date');
   const board_re = [
     RegExp('^(\\d+)'),
@@ -36,10 +40,24 @@ var emoji = new EmojiConvertor();
   // a helper function to call when our request for dreams is done
   const updateBoards = function() {
     // parse our response to convert to JSON
-    var board_info = JSON.parse(this.responseText);
-    boards = board_info.boards;
-    console.log(boards);
-    updateBoard(-1, true);
+    boards = JSON.parse(this.responseText);
+    setTimeout(getSummary, 0);
+    stepBoard(-1, true);
+  }
+  
+  const getSummary = function() {
+    var flipped = boards.slice().reverse();
+    var last_score = null;
+    for(var idx in flipped) {
+      var b = flipped[idx];
+      if(b.score == 0 && last_score !== 0) { 
+        starts.push(flipped.length - idx - 1);
+        if(last_score) { final_scores.push(last_score); }
+      }
+      last_score = b.score;
+    }
+    console.log(final_scores);
+    console.log(starts);
   }
   
   const buildPollElement = function(label, percent, val, rank) {
@@ -64,29 +82,9 @@ var emoji = new EmojiConvertor();
     return row
   }
   
-  const updateBoard = function(dir, first_load) {
-    let orig_board = curboard;
-    if(first_load) { 
-      orig_board = orig_board + dir;
-      orig_board = orig_board.mod(boards.length);
-    } else {
-      curboard -= dir;
-      curboard = curboard.mod(boards.length);
-    }
-    while(curboard != orig_board) {
-      var is_valid = false;
-      for(var idx in board_re) {
-        var re = board_re[idx];
-        is_valid |= re.test(boards[curboard].board);
-      }
-      if(is_valid) { break; }
-      // Minus cause they're sorted DESC
-      // And I want +1 to step forward in time
-      curboard -= dir;
-      curboard = curboard.mod(boards.length);
-      //console.log("Checking " + curboard)
-    }
-    //console.log(curboard);
+  const setBoard = function(idx) {
+    curboard = idx;
+    
     board.innerText = boards[curboard].board;
     var tweet_date = new Date(boards[curboard].timestamp)
     var date_link = document.createElement('a');
@@ -96,7 +94,13 @@ var emoji = new EmojiConvertor();
     date.innerHTML = "";
     date.appendChild(date_link);
     votes.innerHTML = "";
-    var poll = boards[curboard].poll_data;
+    
+    setPoll(boards[curboard].poll_data);
+    
+    board.innerHTML = emoji.replace_unified(board.innerHTML);
+  }
+  
+  const setPoll = function(poll) {
     var total = 0;
     var winner = 0;
     if(poll) {
@@ -123,12 +127,43 @@ var emoji = new EmojiConvertor();
         votes.appendChild(voterow);
       }
     }
-    
-    board.innerHTML = emoji.replace_unified(board.innerHTML);
+  }
+  
+  const stepStart = function(dir) {
+    if(dir == 1) {
+      for(var start_idx of starts) {
+        if(start_idx < curboard) {
+          setBoard(start_idx);
+          return;
+        }
+      }
+      setBoard(starts[0]);
+    } else {
+      var rev = starts.slice().reverse();
+      for(var start_idx of rev) {
+        if(start_idx > curboard) {
+          setBoard(start_idx);
+          return;
+        }
+      }
+      setBoard(rev[0]);
+    }
+  }
+  
+  const stepBoard = function(dir, first_load) {
+    let orig_board = curboard;
+    if(first_load) { 
+      orig_board = orig_board + dir;
+      orig_board = orig_board.mod(boards.length);
+    } else {
+      curboard -= dir;
+      curboard = curboard.mod(boards.length);
+    }
+    setBoard(curboard);
   }
   
   const play_step = function() {
-    updateBoard(1);
+    stepBoard(1);
     play_timeout = setTimeout(play_step, play_delay);
   }
   
@@ -138,15 +173,23 @@ var emoji = new EmojiConvertor();
   dreamRequest.open('get', '/boards');
   dreamRequest.send();
 
+  prevStart.onclick = function(event) {
+    clearTimeout(play_timeout);
+    stepStart(-1);
+  }
   prev.onclick = function(event) {
     clearTimeout(play_timeout);
-    updateBoard(-1);
+    stepBoard(-1);
   }
   play.onclick = function(event) {
     play_step();
   }
   next.onclick = function(event) {
     clearTimeout(play_timeout);
-    updateBoard(1);
+    stepBoard(1);
+  }
+  nextStart.onclick = function(event) {
+    clearTimeout(play_timeout);
+    stepStart(1);
   }
 })()
