@@ -67,6 +67,7 @@ app.get("/update", function (request, response) {
   boards.update({
     screen_name: 'emojitetra',
     count: 200,
+    backfill: request.query.backfill,
   }, (resp) => {
     console.log(resp);
     fs.unlink(board_cache, (err) => {
