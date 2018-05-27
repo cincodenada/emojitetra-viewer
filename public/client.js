@@ -17,6 +17,7 @@ var emoji = new EmojiConvertor();
   let play_timeout = null;
   var starts = [];
   var final_scores = [];
+  var idmap = {};
   
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
   emoji.img_set = "twitter";
@@ -27,6 +28,7 @@ var emoji = new EmojiConvertor();
   const board = document.getElementById('board');
   const votes = document.getElementById('votes');
   const prevStart = document.getElementById('prevStart');
+  const high_scores = document.getElementById('high_scores');
   const prev = document.getElementById('prev');
   const play = document.getElementById('play');
   const next = document.getElementById('next');
@@ -41,8 +43,8 @@ var emoji = new EmojiConvertor();
   const updateBoards = function() {
     // parse our response to convert to JSON
     boards = JSON.parse(this.responseText);
-    setTimeout(getSummary, 0);
-    stepBoard(-1, true);
+    getSummary()
+    setBoard(curboard)
   }
   
   const getSummary = function() {
@@ -55,9 +57,14 @@ var emoji = new EmojiConvertor();
         if(last_score) { final_scores.push(last_score); }
       }
       last_score = b.score;
+      idmap[b.id] = idx;
     }
-    console.log(final_scores);
-    console.log(starts);
+    final_scores.sort(function(a,b) { return b-a; });
+    high_scores.innerHTML = "";
+    for(var score of final_scores.slice(0,3)) {
+      high_scores.append(document.createTextNode(score));
+      high_scores.append(document.createElement('br'))
+    }
   }
   
   const buildPollElement = function(label, percent, val, rank) {

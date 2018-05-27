@@ -79,6 +79,10 @@ footer {
   border-left: 1px solid black;
 }
 
+.vote_icon, .vote_bar {
+    position: relative;
+    top: 0.15em;
+}
 .vote_icon {
   min-width: 1.5em;
   display: inline-block;
@@ -87,7 +91,6 @@ footer {
   display: inline-block;
   background: lightblue;
   height: 1em;
-  vertical-align: text-bottom;
   margin-right: 0.5em;
 }
 .vote_bar.winner {
