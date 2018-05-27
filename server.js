@@ -76,6 +76,13 @@ app.get("/update", function (request, response) {
   })
 });
 
+app.get("/check", function(request, response) {
+  boards.getBoards(function(boards) {
+    for(var b of boards) {
+    }
+  }, true);
+})
+
 
 app.get("/details/:id", function (request, response) {
   // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49

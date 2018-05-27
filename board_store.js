@@ -96,7 +96,8 @@ module.exports = class BoardStore {
         }
 
         var total_tweets = prev_count + num_tweets - ignored_tweets;
-        if(num_tweets) {
+        // Don't unconditionally go backwards yet
+        if(num_tweets && from_id) {
           // Down the rabbit hole, time to get more...
           self.getTweets(from_id, last_tweet_id, params, cb, self, total_tweets);
         } else {
@@ -145,12 +146,12 @@ module.exports = class BoardStore {
     return true;
   }
   
-  getBoards(cb) {
+  getBoards(cb, include_meta) {
     this.db.all("SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
       var boards = [];
       for(var r of rows) {
         var cur_board = new Board(r);
-        if(cur_board.score !== null) { boards.push(cur_board) };
+        if(!include_meta && cur_board.score !== null) { boards.push(cur_board) };
       }
       cb(boards)
     })
