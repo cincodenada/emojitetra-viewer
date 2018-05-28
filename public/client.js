@@ -34,6 +34,7 @@ var emoji = new EmojiConvertor();
   const next = document.getElementById('next');
   const nextStart = document.getElementById('nextStart');
   const date = document.getElementById('date');
+  const permalink = document.getElementById('permalink');
   const board_re = [
     RegExp('^(\\d+)'),
     RegExp('Score (\\d+)'),
@@ -44,7 +45,11 @@ var emoji = new EmojiConvertor();
     // parse our response to convert to JSON
     boards = JSON.parse(this.responseText);
     getSummary()
-    setBoard(curboard)
+    if(cur_tweet) {
+      setBoard(idmap[cur_tweet])
+    } else {
+      setBoard(curboard)
+    }
   }
   
   const getSummary = function() {
@@ -52,13 +57,16 @@ var emoji = new EmojiConvertor();
     var last_score = null;
     for(var idx in flipped) {
       var b = flipped[idx];
+      var fwd_idx = flipped.length - idx - 1;
       if(b.score == 0 && last_score !== 0) { 
-        starts.push(flipped.length - idx - 1);
+        if(fwd_idx < flipped.length - 1) { starts.push(fwd_idx+1); }
+        starts.push(fwd_idx);
         if(last_score) { final_scores.push(last_score); }
       }
       last_score = b.score;
-      idmap[b.id] = idx;
+      idmap[b.id] = fwd_idx;
     }
+    if(starts[starts.length-1] != 0) { starts.push(0); }
     final_scores.sort(function(a,b) { return b-a; });
     high_scores.innerHTML = "";
     for(var score of final_scores.slice(0,3)) {
@@ -91,17 +99,19 @@ var emoji = new EmojiConvertor();
   
   const setBoard = function(idx) {
     curboard = idx;
+    var cboard = boards[curboard];
     
-    board.innerText = boards[curboard].board;
-    var tweet_date = new Date(boards[curboard].timestamp)
+    board.innerText = cboard.board;
+    var tweet_date = new Date(cboard.timestamp)
     var date_link = document.createElement('a');
     date_link.innerText = tweet_date;
     date_link.target = "_blank";
-    date_link.href = "https://twitter.com/EmojiTetra/status/" + boards[curboard].id;
+    date_link.href = "https://twitter.com/EmojiTetra/status/" + cboard.id;
     date.innerHTML = "";
     date.appendChild(date_link);
-    votes.innerHTML = "";
+    permalink.href = "/" + cboard.id;
     
+    votes.innerHTML = "";
     setPoll(boards[curboard].poll_data);
     
     board.innerHTML = emoji.replace_unified(board.innerHTML);
