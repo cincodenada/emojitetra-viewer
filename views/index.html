@@ -26,6 +26,10 @@
 
     <!-- Emoji -->
     <link rel="stylesheet" href="/emoji.css" />
+    
+    <script type="text/javascript">
+      var cur_tweet = '{{ tweet_id }}'; // Filled from template
+    </script>
   </head>
   <body>
     <header>
@@ -60,6 +64,7 @@
     </main>
 
     <footer>
+      <a id="permalink" href="/{{tweet_id}}">🔗Permalink</a><br/>
       Made with <a href="https://glitch.com">Glitch</a> by <a href="https://twitter.com/cincodenada">@cincodenada</a>. Source on <a href="https://gitlab.com/cincodenada/emojitetra-viewer">GitLab</a> and <a href="https://glitch.com/~emojitetra-viewer">right here on Glitch</a> 
     </footer>
     

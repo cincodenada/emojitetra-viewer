@@ -9,6 +9,13 @@ var bodyParser = require('body-parser');
 var Twitter = require('twitter');
 var app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
+var nj = require('nunjucks');
+
+nj.configure('views', {
+    autoescape: true,
+    express: app,
+    noCache: true,
+});
 
 // we've started you off with Express, 
 // but feel free to use whatever libs or frameworks you'd like through `package.json`.
@@ -154,8 +161,9 @@ app.get("/auth", function (request, response) {
 });
 
 
-app.get("/", function (request, response) {
-  response.sendFile(__dirname + '/views/index.html');
+app.get("/:id?", function (request, response) {
+  console.log(request.params.id)
+  response.render(__dirname + '/views/index.html', {tweet_id: request.params.id});
 });
 
 // listen for requests :)
