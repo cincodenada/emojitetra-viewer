@@ -146,12 +146,35 @@ module.exports = class BoardStore {
     return true;
   }
   
-  getBoards(cb, include_meta) {
-    this.db.all("SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards ORDER BY timestamp DESC", function(err, rows) {
+  getBoards(cb, opts) {
+    var opts = opts || {}
+    var limit = opts.limit || 50000; // Disable for now
+    var order = order || -1;
+    
+    var where = [], params = {};
+    if(opts.newest) {
+      where.push("id < $newest");
+      params['$newest'] = opts.newest;
+    }
+    if(opts.oldest) {
+      where.push("id > $oldest");
+      params['$oldest'] = opts.oldest;
+    }
+    //params['$limit'] = parseInt(limit);
+    
+    var limit_int = parseInt(limit);
+    var order_str = (order > 0 ? "ASC" : "DESC");
+    var where_str = "";
+    if(where.length) { where_str = "WHERE " + where.join(" AND ") }
+    var query = "SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards " +
+        where_str + " ORDER BY timestamp " + order_str + " LIMIT " + limit_int; 
+    
+    this.db.all(query, params, function(err, rows) {
+      if(err) { console.log(err) }
       var boards = [];
       for(var r of rows) {
         var cur_board = new Board(r);
-        if(!include_meta && cur_board.score !== null) { boards.push(cur_board) };
+        if(!opts.include_meta && cur_board.score !== null) { boards.push(cur_board) };
       }
       cb(boards)
     })

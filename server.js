@@ -87,7 +87,7 @@ app.get("/check", function(request, response) {
   boards.getBoards(function(boards) {
     for(var b of boards) {
     }
-  }, true);
+  }, {include_meta: true});
 })
 
 
