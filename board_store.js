@@ -161,6 +161,7 @@ module.exports = class BoardStore {
 const board_re = [
   RegExp('^(\\d\\S+)'),
   RegExp('Score (\\d+)'),
+  RegExp('Score\n.*(\\d+)'),
 ]
 
 class Board {
@@ -194,6 +195,10 @@ class Board {
       if(matches) {
         this.score = parseInt(matches[1].replace(/\D/g,""));
       }
+    }
+    if(this.score === null) {
+      console.log("Failed to match:")
+      console.log(this.board)
     }
   }
 }

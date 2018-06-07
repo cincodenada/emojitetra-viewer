@@ -34,10 +34,10 @@ form {
 }
 
 input {
-  display: block;
+  /* display: block; */
   margin-bottom: 10px;
   padding: 5px;
-  width: 100%;
+  /* width: 100%; */
   border: 1px solid lightgrey;
   border-radius: 3px;
   font-size: 16px;
@@ -96,3 +96,5 @@ footer {
 .vote_bar.winner {
   background: gold;
 }
+
+#fps { width: 3em; }

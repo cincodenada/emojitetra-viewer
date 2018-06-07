@@ -6,6 +6,9 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
 };
 
+// Milliseconds between frames in "play mode"
+// It's a global, overwrite this to change the speed!
+// "play_delay = 250" in the console to get 4fps
 let play_delay = 1000;
 var emoji = new EmojiConvertor();
 
@@ -16,7 +19,7 @@ var emoji = new EmojiConvertor();
   let curboard = 0;
   let play_timeout = null;
   var starts = [];
-  var final_scores = [];
+  var final_boards = [];
   var idmap = {};
   
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
@@ -35,10 +38,19 @@ var emoji = new EmojiConvertor();
   const nextStart = document.getElementById('nextStart');
   const date = document.getElementById('date');
   const permalink = document.getElementById('permalink');
+  const fps = document.getElementById('fps');
+  const replaceEmoji = document.getElementById('replace_emoji');
   const board_re = [
     RegExp('^(\\d+)'),
     RegExp('Score (\\d+)'),
   ]
+  
+  const emojify = function(text) {
+    if(replaceEmoji.checked) {
+      return emoji.replace_unified(text);
+    }
+    return text
+  }
   
   // a helper function to call when our request for dreams is done
   const updateBoards = function() {
@@ -61,16 +73,20 @@ var emoji = new EmojiConvertor();
       if(b.score == 0 && last_score !== 0) { 
         if(fwd_idx < flipped.length - 1) { starts.push(fwd_idx+1); }
         starts.push(fwd_idx);
-        if(last_score) { final_scores.push(last_score); }
+        if(last_score) { final_boards.push(fwd_idx+1); }
       }
       last_score = b.score;
       idmap[b.id] = fwd_idx;
     }
     if(starts[starts.length-1] != 0) { starts.push(0); }
-    final_scores.sort(function(a,b) { return b-a; });
+    final_boards.sort(function(a,b) { return boards[b].score-boards[a].score; });
     high_scores.innerHTML = "";
-    for(var score of final_scores.slice(0,3)) {
-      high_scores.append(document.createTextNode(score));
+    for(var final_idx of final_boards.slice(0,3)) {
+      var b = boards[final_idx];
+      var link = document.createElement('a')
+      link.href = '/' + b.id;
+      link.innerText = b.score;
+      high_scores.append(link);
       high_scores.append(document.createElement('br'))
     }
   }
@@ -80,9 +96,8 @@ var emoji = new EmojiConvertor();
     var row = document.createElement('div');
     var icon = document.createElement('span');
     icon.className = 'vote_icon';
-    //icon.innerHTML = label;
     label = rank_icons[rank] + label
-    icon.innerHTML = emoji.replace_unified(label);
+    icon.innerHTML = emojify(label);
     var bar = document.createElement('div');
     bar.style.width = 5*percent + "em";
     if(rank === 1) {
@@ -98,7 +113,7 @@ var emoji = new EmojiConvertor();
   }
   
   const setBoard = function(idx) {
-    curboard = idx;
+    if(idx != null) { curboard = idx; }
     var cboard = boards[curboard];
     
     board.innerText = cboard.board;
@@ -114,7 +129,7 @@ var emoji = new EmojiConvertor();
     votes.innerHTML = "";
     setPoll(boards[curboard].poll_data);
     
-    board.innerHTML = emoji.replace_unified(board.innerHTML);
+    board.innerHTML = emojify(board.innerHTML);
   }
   
   const setPoll = function(poll) {
@@ -208,5 +223,19 @@ var emoji = new EmojiConvertor();
   nextStart.onclick = function(event) {
     clearTimeout(play_timeout);
     stepStart(1);
+  }
+  
+  replaceEmoji.onchange = function(event) {
+    setBoard();
+  }
+  
+  fps.onkeyup = function(event) {
+    var val = this.value;
+    if(this.debounce) { clearTimeout(this.debounce) }
+    this.debounce = setTimeout(this.onchange, 750);
+  }
+  
+  fps.onchange = function(event) {
+    if(this.value) { play_delay = 1000/this.value; }
   }
 })()
