@@ -7,6 +7,8 @@ var https = require('https');
 var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
+var compression = require('compression');
+
 var app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
 var nj = require('nunjucks');
@@ -22,6 +24,7 @@ nj.configure('views', {
 
 // http://expressjs.com/en/starter/static-files.html
 app.use(express.static('public'));
+app.use(compression());
 
 var BoardStore = require('./board_store.js');
 
@@ -163,7 +166,10 @@ app.get("/auth", function (request, response) {
 
 app.get("/:id?", function (request, response) {
   console.log(request.params.id)
-  response.render(__dirname + '/views/index.html', {tweet_id: request.params.id});
+  response.render(__dirname + '/views/index.html', {
+    tweet_id: request.params.id,
+    play_speed: request.query.play_speed,
+  });
 });
 
 // listen for requests :)

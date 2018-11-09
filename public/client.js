@@ -62,6 +62,12 @@ var emoji = new EmojiConvertor();
     } else {
       setBoard(curboard)
     }
+
+    // If we have a play speed param, set it and start playing
+    if(play_speed) {
+      set_fps(play_speed);
+      play_step();
+    }
   }
   
   const getSummary = function() {
@@ -196,32 +202,36 @@ var emoji = new EmojiConvertor();
   
   const play_step = function() {
     stepBoard(1);
-    play_timeout = setTimeout(play_step, play_delay);
+    if(!play_timeout) {
+      play_timeout = setInterval(play_step, play_delay);
+    }
   }
   
-  // request the dreams from our app's sqlite database
-  const dreamRequest = new XMLHttpRequest();
-  dreamRequest.onload = updateBoards;
-  dreamRequest.open('get', '/boards');
-  dreamRequest.send();
-
+  const set_fps = function(fps) {
+    play_delay = 1000/fps;
+    if(play_timeout) {
+      clearInverval(play_timeout);
+      play_step();
+    }
+  }
+  
   prevStart.onclick = function(event) {
-    clearTimeout(play_timeout);
+    clearInterval(play_timeout);
     stepStart(-1);
   }
   prev.onclick = function(event) {
-    clearTimeout(play_timeout);
+    clearInterval(play_timeout);
     stepBoard(-1);
   }
   play.onclick = function(event) {
     play_step();
   }
   next.onclick = function(event) {
-    clearTimeout(play_timeout);
+    clearInterval(play_timeout);
     stepBoard(1);
   }
   nextStart.onclick = function(event) {
-    clearTimeout(play_timeout);
+    clearInterval(play_timeout);
     stepStart(1);
   }
   
@@ -236,6 +246,12 @@ var emoji = new EmojiConvertor();
   }
   
   fps.onchange = function(event) {
-    if(this.value) { play_delay = 1000/this.value; }
+    if(this.value) { set_fps(this.value); }
   }
+  
+  // Load the boards!
+  const dreamRequest = new XMLHttpRequest();
+  dreamRequest.onload = updateBoards;
+  dreamRequest.open('get', '/boards');
+  dreamRequest.send();
 })()

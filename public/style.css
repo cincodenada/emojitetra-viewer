@@ -70,8 +70,11 @@ footer {
   border-top: 1px solid lightgrey;
 }
 
-#current { display: flex; }
-#date { line-height: 2em; }
+#current { display: flex; flex-wrap: wrap; }
+#date { line-height: 1.5em; font-size: 75%; }
+
+#board { min-width: 12em; }
+#right_panel { min-width: 8em; }
 
 #next_votes {
   margin-left: 5px;

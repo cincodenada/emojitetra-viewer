@@ -28,7 +28,9 @@
     <link rel="stylesheet" href="/emoji.css" />
     
     <script type="text/javascript">
-      var cur_tweet = '{{ tweet_id }}'; // Filled from template
+      // Template variables
+      var cur_tweet = '{{ tweet_id }}';
+      var play_speed = {{ play_speed | d('null') }};
     </script>
   </head>
   <body>
@@ -86,20 +88,21 @@
     <div class="glitchButton" style="position:fixed;top:20px;right:20px;"></div>
     <script src="https://button.glitch.me/button.js"></script>
     
-    <!-- Piwik -->
+    <!-- Matomo -->
     <script type="text/javascript">
       var _paq = _paq || [];
+      /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
       _paq.push(['trackPageView']);
       _paq.push(['enableLinkTracking']);
       (function() {
         var u="//analytics.cincodenada.com/";
         _paq.push(['setTrackerUrl', u+'piwik.php']);
-        _paq.push(['setSiteId', 3]);
+        _paq.push(['setSiteId', '3']);
         var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
         g.type='text/javascript'; g.async=true; g.defer=true; g.src=u+'piwik.js'; s.parentNode.insertBefore(g,s);
       })();
     </script>
-    <noscript><p><img src="//analytics.cincodenada.com/piwik.php?idsite=3" style="border:0;" alt="" /></p></noscript>
-    <!-- End Piwik Code -->
+    <noscript><p><img src="//analytics.cincodenada.com/piwik.php?idsite=3&amp;rec=1" style="border:0;" alt="" /></p></noscript>
+    <!-- End Matomo Code -->
   </body>
 </html>
