@@ -63,15 +63,24 @@ const board_precache = './.data/board_precache.json';
 
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/boards", function (request, response) {
+  console.log("Requesting boards...")
   if(!request.query.force) {
     try {
-      fs.statSync(board_cache);
-      response.sendFile(__dirname + '/' + board_cache);
+      response.setHeader("content-type", "application/json");
+      fs.statSync(__dirname + '/' + board_cache);
+      fs.createReadStream(__dirname + '/' + board_cache).pipe(response);
       return
-    } catch(e) {}
+    } catch(e) {
+      console.log("Generating fresh");
+    }
   }
   boards.getBoards(function(boards) {
-    fs.writeFile(board_cache, JSON.stringify(boards));
+    // TODO: Stream this?
+    fs.writeFile(__dirname + '/' + board_cache, JSON.stringify(boards), (err) => {
+      console.log("Wrote file!")
+      console.log(err)
+    });
+    console.log("Writing response")
     response.json(boards);
   })
 });
@@ -84,6 +93,7 @@ app.get("/update", function (request, response) {
   }, (resp) => {
     console.log(resp);
     fs.unlink(board_cache, (err) => {
+      console.log(err);
       response.json(resp);
     })
   })

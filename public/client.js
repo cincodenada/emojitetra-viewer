@@ -22,6 +22,31 @@ var emoji = new EmojiConvertor();
   var final_boards = [];
   var idmap = {};
   
+  // Board callback function
+  const updateBoards = function() {
+    // parse our response to convert to JSON
+    boards = JSON.parse(this.responseText);
+    getSummary()
+    if(cur_tweet) {
+      setBoard(idmap[cur_tweet])
+    } else {
+      setBoard(curboard)
+    }
+
+    // If we have a play speed param, set it and start playing
+    if(play_speed) {
+      set_fps(play_speed);
+      play_step();
+    }
+  }  
+  
+  // Load the boards!
+  const dreamRequest = new XMLHttpRequest();
+  dreamRequest.onload = updateBoards;
+  dreamRequest.open('get', '/boards');
+  dreamRequest.send();
+  
+  // Now get to the rest of the business...
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
   emoji.img_set = "twitter";
   emoji.use_sheet = true;
@@ -51,24 +76,7 @@ var emoji = new EmojiConvertor();
     }
     return text
   }
-  
-  // a helper function to call when our request for dreams is done
-  const updateBoards = function() {
-    // parse our response to convert to JSON
-    boards = JSON.parse(this.responseText);
-    getSummary()
-    if(cur_tweet) {
-      setBoard(idmap[cur_tweet])
-    } else {
-      setBoard(curboard)
-    }
 
-    // If we have a play speed param, set it and start playing
-    if(play_speed) {
-      set_fps(play_speed);
-      play_step();
-    }
-  }
   
   const getSummary = function() {
     var flipped = boards.slice().reverse();
@@ -248,10 +256,4 @@ var emoji = new EmojiConvertor();
   fps.onchange = function(event) {
     if(this.value) { set_fps(this.value); }
   }
-  
-  // Load the boards!
-  const dreamRequest = new XMLHttpRequest();
-  dreamRequest.onload = updateBoards;
-  dreamRequest.open('get', '/boards');
-  dreamRequest.send();
 })()

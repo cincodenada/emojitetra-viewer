@@ -138,6 +138,7 @@ module.exports = class BoardStore {
   }
   
   storeTweet(tweet, exists) {
+    console.log("Storing tweet " + tweet.id_str)
     var tweet_timestamp = new Date(tweet.created_at);
     var poll_data = {}
     if(tweet.card) {
@@ -160,12 +161,25 @@ module.exports = class BoardStore {
     if(exists) {
       // Scope nonsense
       var db = this.db;
+      console.log("Checking for recency...");
       // Check if we have new data, and if so update the tweet and add it to the poll_data table
       db.get("SELECT MAX(timestamp) AS recent FROM poll_data WHERE tweet_id = ?",tweet.id_str,function(err, timestamp) {
+        console.log(timestamp.recent)
+        console.log(poll_updated.getTime())
         if(timestamp.recent < poll_updated.getTime()) {
           console.log("Updating tweet " + tweet.id_str);
           db.run("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str);
           db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
+        } else {
+          db.get("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str,function(err, data) {
+            if(data.cnt == 0) {
+              // I don't know how we get here, hopefully it's transient
+              db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json,(err) => {
+                console.log("Inserted board")
+                console.log(err)
+              });
+            }
+          })
         }
       })
     } else {
@@ -211,16 +225,29 @@ module.exports = class BoardStore {
   }
   
   getRaw(cb) {
-    this.db.all("SELECT json FROM boards ORDER BY id DESC LIMIT 200", function(err, rows) {
+    var self = this;
+    this.db.all("SELECT json FROM boards ORDER BY id DESC", function(err, rows) {
       if(err) { console.log(err) }
       var output = "";
-      var last_reply = "";
+      var expected_next = "";
       for(var r of rows) {
         var parsed = JSON.parse(r.json)
         if(parsed.text.indexOf("◽") > -1) {
-          if(last_reply && parsed.id_str == last_reply) { output += "✔️" }
+          if(expected_next) {
+            if(parsed.id_str != expected_next) {
+              // Here we skipped a thing, go fetch it
+              /*
+              self.getDetails(expected_next, (fulltweet) => {
+                self.storeTweet(fulltweet, false);
+              })
+              */
+              output += "❓"
+            } else {
+              output += "✔️"
+            }
+          }
           output += '<a href="https://twitter.com/EmojiTetra/status/' + parsed.id_str + '">Board ' + parsed.created_at + '</a><br/>\n';
-          last_reply = parsed.in_reply_to_status_id_str;
+          expected_next = parsed.in_reply_to_status_id_str;
         } else if(parsed.text.indexOf("new thread") > -1) {
           output += '<a href="https://twitter.com/EmojiTetra/status/' + parsed.id_str + '">Continuation ' + parsed.created_at + '</a><br/>\n';
         } else {
@@ -271,7 +298,7 @@ class Board {
       }
     }
     if(this.score === null) {
-      console.log(this.board)
+      //console.log(this.board)
     }
   }
 }
