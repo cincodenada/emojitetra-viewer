@@ -38,7 +38,10 @@ var db = new sqlite3.Database(dbFile);
 db.serialize(function(){
   if (!exists) {
     db.run('CREATE TABLE boards (id BIGINT, board TEXT, timestamp INTEGER, json TEXT, poll_data TEXT)');
-    console.log('New table boards created!');
+    db.run('CREATE INDEX board_id ON boards (id)');
+    db.run('CREATE TABLE poll_data (tweet_id BIGINT, timestamp INTEGER, poll_data TEXT)');
+    db.run('CREATE INDEX tweet_timestamp ON poll_data(tweet_id, timestamp)');
+    console.log('Tables created!');
   }
 });
 
@@ -87,10 +90,9 @@ app.get("/update", function (request, response) {
 });
 
 app.get("/check", function(request, response) {
-  boards.getBoards(function(boards) {
-    for(var b of boards) {
-    }
-  }, {include_meta: true});
+  boards.getRaw(function(boards) {
+    response.send(boards)
+  });
 })
 
 
