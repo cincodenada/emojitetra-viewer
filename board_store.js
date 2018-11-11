@@ -299,6 +299,7 @@ class Board {
         }
       }
       this.poll_data = results;
+      this.poll_finished = parsed.counts_are_final;
     }
   }
   

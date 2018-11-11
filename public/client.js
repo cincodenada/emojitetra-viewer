@@ -226,8 +226,13 @@ function BoardBin() {
     date.appendChild(date_link);
     permalink.href = "/" + cboard.id;
     
-    votes.innerHTML = "";
-    setPoll(boards[curboard].poll_data);
+    
+    if(boards[curboard].poll_finished) {
+      votes.innerHTML = "";
+      setPoll(boards[curboard].poll_data);
+    } else {
+      votes.innerHTML = "⌛ Poll in progress!";
+    }
     
     board.innerHTML = emojify(board.innerHTML);
   }
