@@ -284,6 +284,7 @@ class Board {
     this.board = board_info.board;
     this.id = BigInt(board_info.id);
     this.timestamp = board_info.timestamp;
+    this.prev = board_info.
     this.parsePoll(board_info.poll_data);
     this.parseScore()
   }

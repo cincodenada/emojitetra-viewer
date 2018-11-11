@@ -19,43 +19,88 @@ const chunk_size = 50;
 function BoardBin() {
   let boards = {};
   // Kept sorted, 0 = most recent
-  let board_ids = [];
+  let board_ts = [];
   // [start, end]
-  let ranges = [];
+  let ranges = []
+  // start: end
+  let gaps_fwd = {};
+  // end: start
+  let gaps_rev = {};
   
   // TODO: Ugh, all this has to be bigints and shit
-  this.addBoards = function(boards) {
-    let start = boards[0].id;
-    let end = boards[0].id;
-    for(let b of boards) {
-      if(b.id < start) { start = b.id; }
-      if(b.id > end) { end = b.id; }
-      boards[b.id] = b;
+  // Unless we index them by timestamps, which will still be unique for our case...yes...
+  // "Continuing", "Continued", and board will all have the same timestamp, but that's fine
+  // Cause we ignore those, yay
+  // We could avoid is_continuous by checking in_reply_to, but Continuations make that annoying
+  // So for now we'll just do some extra queries
+  this.addBoards = function(boards, is_continuous) {
+    // Boards could be in either order, so find the start/end
+    let new_ranges = []
+    if(is_continuous) {
+      let start = boards[0].timestamp
+      let end = boards[0].timestamp
+      for(let b of boards) {
+        if(b.timestamp < start) { start = b.timestamp; }
+        if(b.timestamp > end) { end = b.timestamp; }
+        boards[b.timestamp] = b;
+      }
+      new_ranges.push([start, end])
+    } else {
+      for(let b of boards) {
+        new_ranges.push([b.timestamp, b.timestamp])
+      }
     }
     
-    board_ids = Object.keys(boards);
-    board_ids.sort().reverse(); // So lazy! Don't care.
+    board_ts = Object.keys(boards);
+    board_ts.sort().reverse(); // So lazy! Don't care.
     
-    let last_range = null;
-    for(let idx in ranges) {
-      let cur = ranges[idx];
-      // Skip all the ones we start after
-      if(start < cur[0]) {
-        let overlap_prev = (prev && start <= prev[1])
-        let overlap_next = (end >= cur[0])
-        if(overlap_prev && overlap_next) {
-          prev[1] = cur[1];
-          delete ranges[idx];
-        } else if(overlap_prev) {
-          prev[1] = end
-        } else if(overlap_next) {
-          cur[0] = start
-        } else {
-          ranges.splice(idx, 0, [start, end])
+    for(let r of new_ranges) {
+      this.addRange(r[0], r[1]);
+    }
+    
+    this.generateGaps();
+  }
+  
+  this.
+  
+  this.addRange = function(start, end) {
+    if(ranges.length == 0) {
+      ranges = [[start, end]]
+    } else {
+      let prev = null;
+      for(let idx in ranges) {
+        let cur = ranges[idx];
+        // Skip all the ones we start after
+        if(start < cur[0]) {
+          let overlap_prev = (prev && start <= prev[1])
+          let overlap_next = (end >= cur[0])
+          if(overlap_prev && overlap_next) {
+            // We may overlap multiple ranges
+            // Make sure we subsume them all
+            while(ranges[idx][0] <= cur[1]) {
+              prev[1] = Math.max(prev[1], ranges[idx][1]);
+              ranges.splice(idx,1);
+            }
+          } else if(overlap_prev) {
+            prev[1] = end
+          } else if(overlap_next) {
+            cur[0] = start
+          } else {
+            ranges.splice(idx, 0, [start, end])
+          }
+          return
         }
-        return
+        prev = cur;
       }
-      let prev = cur;
+    }
+  }
+  
+  this.generateGaps = function() {
+    gaps_fwd = {};
+    gaps_rev = {}
+    for(let r of ranges) {
+      gaps_fwd[r[0]] = r[1];
+      gaps_rev[r[1]] = r[0];
     }
   }
   
