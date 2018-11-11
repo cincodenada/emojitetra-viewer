@@ -112,8 +112,12 @@ module.exports = class BoardStore {
         tweet_counts.new += (num_tweets - updated);
         // Don't unconditionally go backwards yet
         if(num_tweets && from_id) {
-          // Down the rabbit hole, time to get more...
-          self.getTweets(from_id.toString(), last_tweet_id, existing_tweets, params, cb, self, tweet_counts, depth+1);
+          if(tweet_counts.total > 50) {
+            cb(null, {"continue": [from_id.toString(), last_tweet_id]})
+          } else {
+            // Down the rabbit hole, time to get more...
+            self.getTweets(from_id.toString(), last_tweet_id, existing_tweets, params, cb, self, tweet_counts, depth+1);
+          }
         } else {
           cb(null, tweet_counts)
         }
@@ -184,8 +188,12 @@ module.exports = class BoardStore {
       })
     } else {
       console.log("Saving tweet " + tweet.id_str);
-      this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json);
-      this.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
+      this.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json, (err) => {
+        if(err) { console.log("Couldn't save poll data: " + err); }
+      })
+      this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json, (err) => {
+        if(err) { console.log("Couldn't save tweet: " + err); }
+      });
     }
     return true;
   }
@@ -262,7 +270,7 @@ module.exports = class BoardStore {
 const board_re = [
   RegExp('^(\\d\\S+)'),
   RegExp('Score (\\d+)'),
-  RegExp('Score\n.*(\\d+)'),
+  RegExp('Score\n\\D+(\\d+)'),
 ]
 
 class Board {

@@ -60,6 +60,7 @@ var client = new Twitter({
 var boards = new BoardStore(db, client);
 const board_cache = './.data/board_cache.json';
 const board_precache = './.data/board_precache.json';
+const preload_boards = 10;
 
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/boards", function (request, response) {
@@ -82,7 +83,7 @@ app.get("/boards", function (request, response) {
     });
     console.log("Writing response")
     response.json(boards);
-  })
+  }, {limit: preload_boards})
 });
 
 app.get("/update", function (request, response) {
@@ -103,6 +104,19 @@ app.get("/check", function(request, response) {
   boards.getRaw(function(boards) {
     response.send(boards)
   });
+})
+
+app.get("/fill/:start/:end", function(request, response) {
+  boards.getTweets(request.params.start, request.params.end, [], {
+    screen_name: 'emojitetra',
+    count: 200,
+  }, (err, resp) => {
+    if(resp.continue) {
+      response.send('<a href="/fill/' + resp.continue.join('/') + '">Continue</a>');
+    } else {
+      response.json(resp);
+    }
+  })
 })
 
 
