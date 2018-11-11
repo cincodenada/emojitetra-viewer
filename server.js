@@ -65,6 +65,7 @@ const preload_boards = 10;
 // http://expressjs.com/en/starter/basic-routing.html
 app.get("/boards", function (request, response) {
   console.log("Requesting boards...")
+  /*
   if(!request.query.force) {
     try {
       response.setHeader("content-type", "application/json");
@@ -75,15 +76,23 @@ app.get("/boards", function (request, response) {
       console.log("Generating fresh");
     }
   }
+  */
+  let options = {
+    limit: request.query.count || preload_boards,
+    before: request.query.before,
+  }
+  
   boards.getBoards(function(boards) {
     // TODO: Stream this?
+    /*
     fs.writeFile(__dirname + '/' + board_cache, JSON.stringify(boards), (err) => {
       console.log("Wrote file!")
       console.log(err)
     });
+    */
     console.log("Writing response")
     response.json(boards);
-  }, {limit: preload_boards})
+  }, options)
 });
 
 app.get("/update", function (request, response) {

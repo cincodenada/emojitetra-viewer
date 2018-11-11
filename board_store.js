@@ -204,13 +204,13 @@ module.exports = class BoardStore {
     var order = order || -1;
     
     var where = [], params = {};
-    if(opts.newest) {
+    if(opts.before) {
       where.push("id < $newest");
-      params['$newest'] = opts.newest;
+      params['$newest'] = opts.before;
     }
-    if(opts.oldest) {
+    if(opts.after) {
       where.push("id > $oldest");
-      params['$oldest'] = opts.oldest;
+      params['$oldest'] = opts.after;
     }
     //params['$limit'] = parseInt(limit);
     
@@ -223,12 +223,18 @@ module.exports = class BoardStore {
     
     this.db.all(query, params, function(err, rows) {
       if(err) { console.log(err) }
-      var boards = [];
+      let boards = [];
+      let min_id = (order < 0) ? rows[rows.length-1].id : rows[0].id;
+      let max_id = (order < 0) ? rows[0].id : rows[rows.length-1].id;
       for(var r of rows) {
         var cur_board = new Board(r);
         if(opts.include_meta || cur_board.score !== null) { boards.push(cur_board) };
       }
-      cb(boards)
+      cb({
+        boards: boards,
+        start: min_id,
+        end: max_id,
+      })
     })
   }
   

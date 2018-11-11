@@ -12,6 +12,71 @@ Number.prototype.mod = function(n) {
 let play_delay = 1000;
 var emoji = new EmojiConvertor();
 
+let cur_request = null;
+let last_chunk = null;
+const chunk_size = 50;
+
+function BoardBin() {
+  let boards = {};
+  // Kept sorted, 0 = most recent
+  let board_ids = [];
+  // [start, end]
+  let ranges = [];
+  
+  // TODO: Ugh, all this has to be bigints and shit
+  this.addBoards = function(boards) {
+    let start = boards[0].id;
+    let end = boards[0].id;
+    for(let b of boards) {
+      if(b.id < start) { start = b.id; }
+      if(b.id > end) { end = b.id; }
+      boards[b.id] = b;
+    }
+    
+    board_ids = Object.keys(boards);
+    board_ids.sort().reverse(); // So lazy! Don't care.
+    
+    let last_range = null;
+    for(let idx in ranges) {
+      let cur = ranges[idx];
+      // Skip all the ones we start after
+      if(start < cur[0]) {
+        let overlap_prev = (prev && start <= prev[1])
+        let overlap_next = (end >= cur[0])
+        if(overlap_prev && overlap_next) {
+          prev[1] = cur[1];
+          delete ranges[idx];
+        } else if(overlap_prev) {
+          prev[1] = end
+        } else if(overlap_next) {
+          cur[0] = start
+        } else {
+          ranges.splice(idx, 0, [start, end])
+        }
+        return
+      }
+      let prev = cur;
+    }
+  }
+  
+  this.getContainingRange = function(id) {
+    let prev = null
+    for(let cur of ranges) {
+      // Go until we pass our number
+      if(id < cur[0]) {
+        if(prev && id <= prev[1]) {
+          // If we're in the previous range, bingo
+          return prev;
+        } else {
+          // Otherwise, we're not in there
+          return null;
+        }
+      }
+      let prev = cur;
+    }
+  }
+}
+
 (function(){
   let boards = [];
   let labels = ["↔️ Left or Right","⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
@@ -21,11 +86,13 @@ var emoji = new EmojiConvertor();
   var starts = [];
   var final_boards = [];
   var idmap = {};
-  
+
   // Board callback function
   const updateBoards = function() {
     // parse our response to convert to JSON
-    boards = JSON.parse(this.responseText);
+    let board_data = JSON.parse(this.responseText);
+    boards = boards.concat(board_data.boards);
+    last_chunk = [board_data.start, board_data.end];
     getSummary()
     if(cur_tweet) {
       setBoard(idmap[cur_tweet])
@@ -38,13 +105,32 @@ var emoji = new EmojiConvertor();
       set_fps(play_speed);
       play_step();
     }
-  }  
+    
+    cur_request = null;
+  }
   
-  // Load the boards!
-  const dreamRequest = new XMLHttpRequest();
-  dreamRequest.onload = updateBoards;
-  dreamRequest.open('get', '/boards');
-  dreamRequest.send();
+  const getBoards = function(target_id) {
+    let qs = "";
+    if(!target_id) {
+      if(last_chunk) {
+        qs = '?before=' + last_chunk[0] + '&count=' + chunk_size;
+      }
+    } else {
+      //TODO
+    }
+    
+    // Load the boards!
+    // TODO: Check the id of the request? Hmm
+    if(!cur_request) {
+      cur_request = qs;
+      const dreamRequest = new XMLHttpRequest();
+      dreamRequest.onload = updateBoards;
+      dreamRequest.open('get', '/boards' + qs);
+      dreamRequest.send();
+    }
+  }
+  
+  getBoards();
   
   // Now get to the rest of the business...
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
@@ -206,6 +292,9 @@ var emoji = new EmojiConvertor();
       curboard = curboard.mod(boards.length);
     }
     setBoard(curboard);
+    if(last_chunk && (boards.length - curboard) < chunk_size) {
+      getBoards();
+    }
   }
   
   const play_step = function() {
