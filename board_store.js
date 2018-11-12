@@ -21,7 +21,7 @@ function parse_score(board) {
 class Board {
   constructor(board_info) {
     this.board = board_info.board;
-    this.id = BigInt(board_info.id);
+    this.id = BigInt(board_info.id_str);
     this.timestamp = board_info.timestamp;
     this.parsePoll(board_info.poll_data);
     this.score = parse_score(this.board);
@@ -54,16 +54,16 @@ module.exports = class BoardStore {
     var backfill = params.backfill;
     delete params.backfill;
     if(!backfill) {
-      this.db.all("SELECT CAST(id AS TEXT) as id, timestamp FROM boards ORDER BY timestamp DESC LIMIT 5", (err, recent_tweets) => {
+      this.db.all("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp DESC LIMIT 5", (err, recent_tweets) => {
         if(err) { console.err("Couldn't get recent tweets: " + err); }
 
         var existing_tweets = [];
         if(recent_tweets) {
           var last_tweet = recent_tweets[recent_tweets.length-1];
           var last_timestamp = new Date(last_tweet.timestamp);
-          existing_tweets = recent_tweets.map(t => t.id);
-          last_id = BigInt(last_tweet.id).subtract(1).toString();
-          console.log("Updating tweets from after " + last_tweet.id + " @ " + last_timestamp);
+          existing_tweets = recent_tweets.map(t => t.id_str);
+          last_id = BigInt(last_tweet.id_str).subtract(1).toString();
+          console.log("Updating tweets from after " + last_tweet.id_str + " @ " + last_timestamp);
         } else {
           console.log("Getting all tweets");
           return;
@@ -78,13 +78,13 @@ module.exports = class BoardStore {
         })
       })
     } else {
-      this.db.get("SELECT CAST(id AS TEXT) as id, timestamp FROM boards ORDER BY timestamp ASC LIMIT 1", (err, first_tweet) => {
+      this.db.get("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp ASC LIMIT 1", (err, first_tweet) => {
         if(err) { console.err("Couldn't get last tweet: " + err); }
 
         if(first_tweet) {
           var first_timestamp = new Date(first_tweet.timestamp);
-          var first_id = first_tweet.id;
-          console.log("Getting tweets from before " + first_tweet.id + " @ " + first_timestamp);
+          var first_id = first_tweet.id_str;
+          console.log("Getting tweets from before " + first_tweet.id_str + " @ " + first_timestamp);
           this.getTweets(null, first_id, params, (err, num_tweets) => {
             if(err) {
               cb({"error": err});
@@ -261,7 +261,7 @@ module.exports = class BoardStore {
   
   updateMeta(tweet_id) {
     let self = this;
-    self.db.get('SELECT CAST(id AS STRING) id, board,' +
+    self.db.get('SELECT CAST(id AS STRING) id_str, board,' +
                 'json_extract(json, "$.in_reply_to_status_id_str") prev_id,' +
                 'json_extract(json, "$.retweet_count") retweets,' +
                 'json_extract(json, "$.favorite_count") favorites,' +
@@ -307,7 +307,7 @@ module.exports = class BoardStore {
         }
       
         self.db.run("REPLACE INTO board_meta VALUES(?,?,?, ?,?, NULL,?,?)",
-                    board_info.id,board_info.prev_id,prev_id,
+                    board_info.id_str,board_info.prev_id,prev_id,
                     score, role, board_info.retweets,board_info.favorites);
       })
     });
@@ -317,15 +317,16 @@ module.exports = class BoardStore {
     var opts = opts || {}
     var limit = opts.limit || 50000; // Disable for now
     var order = order || -1;
+    var sort_field = opts.sort_field || "timestamp"
     
     var where = [], params = {};
     if(opts.before) {
-      where.push("timestamp <= $newest");
+      where.push(sort_field + " <= $newest");
       params['$newest'] = opts.before;
       order = -1;
     }
     else if(opts.after) {
-      where.push("timestamp >= $oldest");
+      where.push(sort_field + " >= $oldest");
       params['$oldest'] = opts.after;
       order = 1;
     }
@@ -335,8 +336,8 @@ module.exports = class BoardStore {
     var order_str = (order > 0 ? "ASC" : "DESC");
     var where_str = "";
     if(where.length) { where_str = "WHERE " + where.join(" AND ") }
-    var query = "SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards " +
-        where_str + " ORDER BY timestamp " + order_str + " LIMIT " + limit_int; 
+    var query = "SELECT CAST(id AS TEXT) as id_str, board, timestamp, poll_data FROM boards " +
+        where_str + " ORDER BY " + sort_field + " " + order_str + " LIMIT " + limit_int; 
     
     return {
       query: query,
@@ -352,6 +353,8 @@ module.exports = class BoardStore {
       bopts.before = opts.around;
       aopts.after = opts.around;
       aopts.limit = bopts.limit = Math.round(opts.limit/2 + 0.5)
+      // Around uses tweet IDs
+      aopts.sort_field = bopts.sort_field = "id";
       
       qs.push(this.makeQuery(bopts));
       qs.push(this.makeQuery(aopts));
@@ -373,7 +376,6 @@ module.exports = class BoardStore {
           for(var r of rows) {
             var cur_board = new Board(r);
             if(opts.include_meta || cur_board.score !== null) { boards.push(cur_board) };
-            console.log(JSON.stringify(cur_board));
           }
           resolve()
         })
