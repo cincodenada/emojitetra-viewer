@@ -115,17 +115,9 @@ app.get("/check", function(request, response) {
   });
 })
 
-app.get("/fill/:start/:end", function(request, response) {
-  boards.getTweets(request.params.start, request.params.end, [], {
-    screen_name: 'emojitetra',
-    count: 200,
-  }, (err, resp) => {
-    if(resp.continue) {
-      response.send('<a href="/fill/' + resp.continue.join('/') + '">Continue</a>');
-    } else {
-      response.json(resp);
-    }
-  })
+app.get("/fill", function(request, response) {
+  boards.fillMissing();
+  response.send("Off it goes!")
 })
 
 
@@ -161,6 +153,10 @@ app.get("/invalidate", function(request, response) {
   authRequest.write(body);
   authRequest.end();
   console.log("Requested Twitter Auth...");
+})
+
+app.get("/gen_meta", function(request, response) {
+  
 })
 
 app.get("/auth", function (request, response) {

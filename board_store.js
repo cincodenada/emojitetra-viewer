@@ -1,5 +1,48 @@
 var BigInt = require("big-integer");
 
+function parse_score(board) {  
+  const board_re = [
+    RegExp('Score\n\\D+(\\d+)'),
+    RegExp('Score (\\d+)'),
+    RegExp('^(\\d\\S+)'),
+  ]
+  
+  for(var idx in board_re) {
+    var re = board_re[idx];
+    var matches = re.exec(this.board);
+    if(matches) {
+      return parseInt(matches[1].replace(/\D/g,""));
+    }
+  }
+  
+  return null;
+}
+
+class Board {
+  constructor(board_info) {
+    this.board = board_info.board;
+    this.id = BigInt(board_info.id);
+    this.timestamp = board_info.timestamp;
+    this.parsePoll(board_info.poll_data);
+    this.score = parse_score(this.board);
+  }
+  
+  parsePoll(poll_json) {
+    var parsed = JSON.parse(poll_json);
+    if(parsed) {
+      var results = {};
+      for(var key of Object.keys(parsed)) {
+        if(key.substr(-5) == 'label') {
+          var label = parsed[key];
+          results[label] = parsed[key.replace("_label","_count")];
+        }
+      }
+      this.poll_data = results;
+      this.poll_finished = parsed.counts_are_final;
+    }
+  }
+}
+
 module.exports = class BoardStore {
   constructor(db, twitter) { 
     this.db = db; 
@@ -162,23 +205,23 @@ module.exports = class BoardStore {
     var poll_json = JSON.stringify(poll_data);
     var tweet_json = JSON.stringify(tweet);
     
+    let self = this;
     if(exists) {
       // Scope nonsense
-      var db = this.db;
       console.log("Checking for recency...");
       // Check if we have new data, and if so update the tweet and add it to the poll_data table
-      db.get("SELECT MAX(timestamp) AS recent FROM poll_data WHERE tweet_id = ?",tweet.id_str,function(err, timestamp) {
+      self.db.get("SELECT MAX(timestamp) AS recent FROM poll_data WHERE tweet_id = ?",tweet.id_str,function(err, timestamp) {
         console.log(timestamp.recent)
         console.log(poll_updated.getTime())
         if(timestamp.recent < poll_updated.getTime()) {
           console.log("Updating tweet " + tweet.id_str);
-          db.run("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str);
-          db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
+          self.db.run("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str);
+          self.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
         } else {
-          db.get("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str,function(err, data) {
+          self.db.get("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str,function(err, data) {
             if(data.cnt == 0) {
               // I don't know how we get here, hopefully it's transient
-              db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json,(err) => {
+              self.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json,(err) => {
                 console.log("Inserted board")
                 console.log(err)
               });
@@ -188,14 +231,86 @@ module.exports = class BoardStore {
       })
     } else {
       console.log("Saving tweet " + tweet.id_str);
-      this.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json, (err) => {
+      self.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json, (err) => {
+        if(err) { console.log("Couldn't save tweet: " + err); }
+        this.updateMeta(tweet.id_str);        
+      });
+      self.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json, (err) => {
         if(err) { console.log("Couldn't save poll data: " + err); }
       })
-      this.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json, (err) => {
-        if(err) { console.log("Couldn't save tweet: " + err); }
-      });
     }
+    
     return true;
+  }
+  
+  fillMissing() {
+    let fetched = [];
+    let self = this;
+    this.db.each('SELECT json_extract(b.json, "$.in_reply_to_status_id_str") AS prev_id FROM boards b ' +
+                 'LEFT JOIN boards b2 ON b2.id = prev_id ' +
+                 'WHERE b2.id IS NULL AND prev_id != "" LIMIT 10', function(err, row) {
+      if(!err) {
+        console.log(row);
+        self.getDetails(row.prev_id, (fulltweet) => {
+          self.storeTweet(fulltweet, false);
+          console.log("Recovering " + row.prev_id);
+        })
+      }
+    });
+  }
+  
+  updateMeta(tweet_id) {
+    let self = this;
+    self.db.get('SELECT CAST(id AS STRING) id, board,' +
+                'json_extract(json, "$.in_reply_to_status_id_str") prev_id,' +
+                'json_extract(json, "$.retweet_count") retweets,' +
+                'json_extract(json, "$.favorite_count") favorites,' +
+                'board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end ' +
+                'FROM boards WHERE id=?',tweet_id, (err, board_info) => {
+      if(err) {
+        console.log("Error updating meta for " + tweet_id);
+        return;
+      }
+      // Look up to three boards back for the previous *board
+      let get_prev = function(board_id, cb, depth) {
+        if(!depth) { depth = 0; }
+        if(depth > 3) { cb("Board not found!", null, null); }
+
+        self.db.get('SELECT board, (board LIKE "%◽%") AS is_board, board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end,' +
+                    'json_extract(json, "$.in_reply_to_status_id_str") AS prev_id ' +
+                    'FROM boards WHERE id = ?', board_id, function(err, board) {
+          if(err) {
+            console.log("Error finding previous board to " + board_id);
+            return;
+          }
+          
+          if(board) {
+            if(board.is_board) {
+              cb(null, board_id, board.is_end)
+            } else {
+              get_prev(board.prev_id, cb, depth+1);
+            }
+          } else {
+            cb("Board not found!", null, null);
+          }
+        })
+      }
+      
+      get_prev(board_info.prev_id, function(err, prev_id, prev_is_end) {
+        // If err, board will be null which is what we want
+        let score = parse_score(board_info.board);
+        let role = null;
+        if(board_info.is_end) {
+          role = "end";
+        } else if(prev_is_end) {
+          role = "start";
+        }
+      
+        self.db.run("REPLACE INTO board_meta VALUES(?,?,?, ?,?, NULL,?,?)",
+                    board_info.id,board_info.prev_id,prev_id,
+                    score, role, board_info.retweets,board_info.favorites);
+      })
+    });
   }
   
   getBoards(cb, opts) {
@@ -205,12 +320,14 @@ module.exports = class BoardStore {
     
     var where = [], params = {};
     if(opts.before) {
-      where.push("id < $newest");
+      where.push("timestamp <= $newest");
       params['$newest'] = opts.before;
+      order = -1;
     }
     if(opts.after) {
-      where.push("id > $oldest");
+      where.push("timestamp >= $oldest");
       params['$oldest'] = opts.after;
+      order = 1;
     }
     //params['$limit'] = parseInt(limit);
     
@@ -221,8 +338,12 @@ module.exports = class BoardStore {
     var query = "SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards " +
         where_str + " ORDER BY timestamp " + order_str + " LIMIT " + limit_int; 
     
+    console.log(query);
+    console.log(params);
+    
     this.db.all(query, params, function(err, rows) {
       if(err) { console.log(err) }
+      console.log(rows);
       let boards = [];
       let min_id = (order < 0) ? rows[rows.length-1].id : rows[0].id;
       let max_id = (order < 0) ? rows[0].id : rows[rows.length-1].id;
@@ -246,6 +367,11 @@ module.exports = class BoardStore {
       var expected_next = "";
       for(var r of rows) {
         var parsed = JSON.parse(r.json)
+        if(!parsed || !parsed.text) {
+          console.log("Couldn't parse " + r.id + ": " + r.json)
+          output += "Error at " + r.id + ": " + r.json + "<br/>\n";
+          continue;
+        }
         if(parsed.text.indexOf("◽") > -1) {
           if(expected_next) {
             if(parsed.id_str != expected_next) {
@@ -270,51 +396,5 @@ module.exports = class BoardStore {
       }
       cb(output)
     })
-  }
-}
-
-const board_re = [
-  RegExp('^(\\d\\S+)'),
-  RegExp('Score (\\d+)'),
-  RegExp('Score\n\\D+(\\d+)'),
-]
-
-class Board {
-  constructor(board_info) {
-    this.board = board_info.board;
-    this.id = BigInt(board_info.id);
-    this.timestamp = board_info.timestamp;
-    this.prev = board_info.
-    this.parsePoll(board_info.poll_data);
-    this.parseScore()
-  }
-  
-  parsePoll(poll_json) {
-    var parsed = JSON.parse(poll_json);
-    if(parsed) {
-      var results = {};
-      for(var key of Object.keys(parsed)) {
-        if(key.substr(-5) == 'label') {
-          var label = parsed[key];
-          results[label] = parsed[key.replace("_label","_count")];
-        }
-      }
-      this.poll_data = results;
-      this.poll_finished = parsed.counts_are_final;
-    }
-  }
-  
-  parseScore() {
-    this.score = null;
-    for(var idx in board_re) {
-      var re = board_re[idx];
-      var matches = re.exec(this.board);
-      if(matches) {
-        this.score = parseInt(matches[1].replace(/\D/g,""));
-      }
-    }
-    if(this.score === null) {
-      //console.log(this.board)
-    }
   }
 }

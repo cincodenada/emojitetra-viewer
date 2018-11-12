@@ -6,19 +6,30 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
 };
 
+// Binary search whee
+function bin_search(a, value) {
+    var lo = 0, hi = a.length - 1, mid;
+    while (lo <= hi) {
+        mid = Math.floor((lo+hi)/2);
+        if (a[mid] > value)
+            hi = mid - 1;
+        else if (a[mid] < value)
+            lo = mid + 1;
+        else
+            return mid;
+    }
+    return null;
+}
+
 // Milliseconds between frames in "play mode"
 // It's a global, overwrite this to change the speed!
 // "play_delay = 250" in the console to get 4fps
 let play_delay = 1000;
 var emoji = new EmojiConvertor();
 
-let cur_request = null;
-let last_chunk = null;
-const chunk_size = 50;
-
 function BoardBin() {
   let boards = {};
-  // Kept sorted, 0 = most recent
+  // Kept sorted, asc timestamp
   let board_ts = [];
   // [start, end]
   let ranges = []
@@ -27,32 +38,37 @@ function BoardBin() {
   // end: start
   let gaps_rev = {};
   
+  const chunk_size = 50;
+  let cur_request = null;
+
   // TODO: Ugh, all this has to be bigints and shit
   // Unless we index them by timestamps, which will still be unique for our case...yes...
   // "Continuing", "Continued", and board will all have the same timestamp, but that's fine
   // Cause we ignore those, yay
   // We could avoid is_continuous by checking in_reply_to, but Continuations make that annoying
   // So for now we'll just do some extra queries
-  this.addBoards = function(boards, is_continuous) {
+  this.addBoards = function(board_data, is_continuous) {
+    let new_boards = board_data.boards;
     // Boards could be in either order, so find the start/end
     let new_ranges = []
     if(is_continuous) {
-      let start = boards[0].timestamp
-      let end = boards[0].timestamp
-      for(let b of boards) {
+      let start = new_boards[0].timestamp
+      let end = new_boards[0].timestamp
+      for(let b of new_boards) {
         if(b.timestamp < start) { start = b.timestamp; }
         if(b.timestamp > end) { end = b.timestamp; }
         boards[b.timestamp] = b;
       }
       new_ranges.push([start, end])
     } else {
-      for(let b of boards) {
+      for(let b of new_boards) {
         new_ranges.push([b.timestamp, b.timestamp])
+        boards[b.timestamp] = b
       }
     }
     
     board_ts = Object.keys(boards);
-    board_ts.sort().reverse(); // So lazy! Don't care.
+    board_ts.sort();
     
     for(let r of new_ranges) {
       this.addRange(r[0], r[1]);
@@ -60,8 +76,6 @@ function BoardBin() {
     
     this.generateGaps();
   }
-  
-  this.
   
   this.addRange = function(start, end) {
     if(ranges.length == 0) {
@@ -98,9 +112,19 @@ function BoardBin() {
   this.generateGaps = function() {
     gaps_fwd = {};
     gaps_rev = {}
+    let prev = null
     for(let r of ranges) {
-      gaps_fwd[r[0]] = r[1];
-      gaps_rev[r[1]] = r[0];
+      if(prev) {
+        gaps_rev[r[0]] = prev[1];
+        gaps_fwd[prev[1]] = r[0];
+      } else {
+        gaps_rev[r[0]] = 0;
+        // Don't need a forward gap at 0
+      }
+      prev = r;
+    }
+    if(prev) {
+      gaps_fwd[prev[1]] = 1
     }
   }
   
@@ -120,62 +144,110 @@ function BoardBin() {
       let prev = cur;
     }
   }
-}
-
-(function(){
-  let boards = [];
-  let labels = ["↔️ Left or Right","⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
-  let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
-  let curboard = 0;
-  let play_timeout = null;
-  var starts = [];
-  var final_boards = [];
-  var idmap = {};
-
-  // Board callback function
-  const updateBoards = function() {
-    // parse our response to convert to JSON
-    let board_data = JSON.parse(this.responseText);
-    boards = boards.concat(board_data.boards);
-    last_chunk = [board_data.start, board_data.end];
-    getSummary()
-    if(cur_tweet) {
-      setBoard(idmap[cur_tweet])
-    } else {
-      setBoard(curboard)
+  
+  // We could be way more efficient here, keeping track of where we left off
+  // But this'll work and that would be complicated
+  this.ensureMargin = function(idx, direction, margin) {
+    let gap_map = (direction < 0) ? gaps_rev : gaps_fwd;
+    if(idx !== null) {
+      let cur_idx = idx;
+      for(let d=0; d < margin; d++) {
+        if(gap_map[board_ts[cur_idx]] !== undefined) {
+          this.getBoards(board_ts[cur_idx], direction);
+          return true;
+        } else if(cur_idx < 0 || cur_idx >= board_ts.length) {
+          /// TODO: Deal with looping
+          console.log("Ack, reached end!")
+        }
+        cur_idx += direction;
+      }
     }
-
-    // If we have a play speed param, set it and start playing
-    if(play_speed) {
-      set_fps(play_speed);
-      play_step();
-    }
-    
-    cur_request = null;
+    // TODO: else (shouldn't happen?)
+    return false;
   }
   
-  const getBoards = function(target_id) {
+  
+  this.getBoards = function(cb, target_id, direction) {
+    if(typeof(cb) !== "function") {
+      direction = target_id;
+      target_id = cb;
+    }
     let qs = "";
-    if(!target_id) {
-      if(last_chunk) {
-        qs = '?before=' + last_chunk[0] + '&count=' + chunk_size;
+    if(target_id) {
+      if(direction == 0) {
+        // Unsupported currently
+        qs = '?around=' + target_id + '&count=' + chunk_size;        
+      } else if(direction == 1) {
+        qs = '?after=' + target_id + '&count=' + chunk_size;        
+      } else {
+        qs = '?before=' + target_id + '&count=' + chunk_size;        
       }
-    } else {
-      //TODO
     }
     
     // Load the boards!
     // TODO: Check the id of the request? Hmm
     if(!cur_request) {
       cur_request = qs;
-      const dreamRequest = new XMLHttpRequest();
-      dreamRequest.onload = updateBoards;
+      let self = this;
+      let dreamRequest = new XMLHttpRequest();
+      dreamRequest.onload = function() {
+        self.addBoards(JSON.parse(this.responseText), true)
+        cur_request = null
+        cb()
+      };
       dreamRequest.open('get', '/boards' + qs);
       dreamRequest.send();
     }
   }
   
-  getBoards();
+  this.getLast = function() {
+    return boards[board_ts[board_ts.length - 1]]
+  }
+  
+  this.getId = function() {
+    //TODO
+  }
+  
+  this.getNext = function(from_ts, direction) {
+    let next_idx = bin_search(board_ts, from_ts) + direction;
+    let self = this;
+    setTimeout(function() { self.ensureMargin(next_idx, direction, chunk_size-5) }, 0);
+    return boards[board_ts[next_idx]];
+  }
+}
+
+(function(){
+  let boards = new BoardBin();
+  let labels = ["↔️ Left or Right","⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
+  let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
+  let curboard = null;
+  let play_timeout = null;
+  var starts = [];
+  var final_boards = [];
+  var idmap = {};
+
+  // Board callback function
+  const loadBoard = function() {
+    // parse our response to convert to JSON
+    //getSummary()
+    /*
+    if(cur_tweet) {
+      //setBoard(idmap[cur_tweet])
+    } else {
+      setBoard(curboard)
+    }
+    */
+    curboard = boards.getLast();
+    renderBoard(curboard);
+      
+    // If we have a play speed param, set it and start playing
+    if(play_speed) {
+      set_fps(play_speed);
+      play_step();
+    }
+  }
+  
+  boards.getBoards(loadBoard)
   
   // Now get to the rest of the business...
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
@@ -257,10 +329,7 @@ function BoardBin() {
     return row
   }
   
-  const setBoard = function(idx) {
-    if(idx != null) { curboard = idx; }
-    var cboard = boards[curboard];
-    
+  const renderBoard = function(cboard) {
     board.innerText = cboard.board;
     var tweet_date = new Date(cboard.timestamp)
     var date_link = document.createElement('a');
@@ -272,9 +341,9 @@ function BoardBin() {
     permalink.href = "/" + cboard.id;
     
     
-    if(boards[curboard].poll_finished) {
+    if(cboard.poll_finished) {
       votes.innerHTML = "";
-      setPoll(boards[curboard].poll_data);
+      setPoll(cboard.poll_data);
     } else {
       votes.innerHTML = "⌛ Poll in progress!";
     }
@@ -333,18 +402,18 @@ function BoardBin() {
   }
   
   const stepBoard = function(dir, first_load) {
+    /*
     let orig_board = curboard;
-    if(first_load) { 
+    if(first_load) {
       orig_board = orig_board + dir;
       orig_board = orig_board.mod(boards.length);
     } else {
       curboard -= dir;
       curboard = curboard.mod(boards.length);
     }
-    setBoard(curboard);
-    if(last_chunk && (boards.length - curboard) < chunk_size) {
-      getBoards();
-    }
+    */
+    curboard = boards.getNext(curboard.timestamp, dir);
+    renderBoard(curboard);
   }
   
   const play_step = function() {
