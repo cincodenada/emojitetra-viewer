@@ -80,6 +80,8 @@ app.get("/boards", function (request, response) {
   let options = {
     limit: request.query.count || preload_boards,
     before: request.query.before,
+    after: request.query.after,
+    around: request.query.around,
   }
   
   boards.getBoards(function(boards) {

@@ -37,6 +37,8 @@ function BoardBin() {
   let gaps_fwd = {};
   // end: start
   let gaps_rev = {};
+  // id: timestamp
+  let id_map = {};
   
   const chunk_size = 50;
   let cur_request = null;
@@ -57,13 +59,13 @@ function BoardBin() {
       for(let b of new_boards) {
         if(b.timestamp < start) { start = b.timestamp; }
         if(b.timestamp > end) { end = b.timestamp; }
-        boards[b.timestamp] = b;
+        this.addBoard(b);
       }
       new_ranges.push([start, end])
     } else {
       for(let b of new_boards) {
         new_ranges.push([b.timestamp, b.timestamp])
-        boards[b.timestamp] = b
+        this.addBoard(b)
       }
     }
     
@@ -75,6 +77,11 @@ function BoardBin() {
     }
     
     this.generateGaps();
+  }
+  
+  this.addBoard = function(b) {
+    boards[b.timestamp] = b;
+    id_map[b.id] = b.timestamp;
   }
   
   this.addRange = function(start, end) {
@@ -167,11 +174,7 @@ function BoardBin() {
   }
   
   
-  this.getBoards = function(cb, target_id, direction) {
-    if(typeof(cb) !== "function") {
-      direction = target_id;
-      target_id = cb;
-    }
+  this.getBoards = function(target_id, direction, cb) {
     let qs = "";
     if(target_id) {
       if(direction == 0) {
@@ -185,6 +188,7 @@ function BoardBin() {
     }
     
     // Load the boards!
+    // These come back total unordered at this point
     // TODO: Check the id of the request? Hmm
     if(!cur_request) {
       cur_request = qs;
@@ -201,11 +205,11 @@ function BoardBin() {
   }
   
   this.getLast = function() {
-    return boards[board_ts[board_ts.length - 1]]
+    return boards[board_ts[board_ts.length - 1]];
   }
   
-  this.getId = function() {
-    //TODO
+  this.getId = function(tweet_id) {
+    return boards[id_map[tweet_id]];
   }
   
   this.getNext = function(from_ts, direction) {
@@ -222,22 +226,19 @@ function BoardBin() {
   let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
   let curboard = null;
   let play_timeout = null;
-  var starts = [];
-  var final_boards = [];
-  var idmap = {};
+  let starts = [];
+  let final_boards = [];
+  let idmap = {};
 
   // Board callback function
   const loadBoard = function() {
     // parse our response to convert to JSON
     //getSummary()
-    /*
     if(cur_tweet) {
-      //setBoard(idmap[cur_tweet])
+      curboard = boards.getId(cur_tweet);
     } else {
-      setBoard(curboard)
+      curboard = boards.getLast();
     }
-    */
-    curboard = boards.getLast();
     renderBoard(curboard);
       
     // If we have a play speed param, set it and start playing
@@ -247,7 +248,11 @@ function BoardBin() {
     }
   }
   
-  boards.getBoards(loadBoard)
+  if(cur_tweet) {
+    boards.getBoards(cur_tweet, 0, loadBoard)
+  } else {
+    boards.getBoards(null, null, loadBoard)
+  }
   
   // Now get to the rest of the business...
   emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";

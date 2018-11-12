@@ -9,7 +9,7 @@ function parse_score(board) {
   
   for(var idx in board_re) {
     var re = board_re[idx];
-    var matches = re.exec(this.board);
+    var matches = re.exec(board);
     if(matches) {
       return parseInt(matches[1].replace(/\D/g,""));
     }
@@ -313,7 +313,7 @@ module.exports = class BoardStore {
     });
   }
   
-  getBoards(cb, opts) {
+  makeQuery(opts) {
     var opts = opts || {}
     var limit = opts.limit || 50000; // Disable for now
     var order = order || -1;
@@ -324,7 +324,7 @@ module.exports = class BoardStore {
       params['$newest'] = opts.before;
       order = -1;
     }
-    if(opts.after) {
+    else if(opts.after) {
       where.push("timestamp >= $oldest");
       params['$oldest'] = opts.after;
       order = 1;
@@ -338,25 +338,51 @@ module.exports = class BoardStore {
     var query = "SELECT CAST(id AS TEXT) as id, board, timestamp, poll_data FROM boards " +
         where_str + " ORDER BY timestamp " + order_str + " LIMIT " + limit_int; 
     
-    console.log(query);
-    console.log(params);
+    return {
+      query: query,
+      params: params,
+    }
+  }
+  
+  getBoards(cb, opts) {
+    let qs = [];
+    if(opts.around) {
+      let bopts = Object.assign({}, opts);
+      let aopts = Object.assign({}, opts);
+      bopts.before = opts.around;
+      aopts.after = opts.around;
+      aopts.limit = bopts.limit = Math.round(opts.limit/2 + 0.5)
+      
+      qs.push(this.makeQuery(bopts));
+      qs.push(this.makeQuery(aopts));
+    } else {
+      qs.push(this.makeQuery(opts));
+    }
+    console.log(qs);
     
-    this.db.all(query, params, function(err, rows) {
-      if(err) { console.log(err) }
-      console.log(rows);
-      let boards = [];
-      let min_id = (order < 0) ? rows[rows.length-1].id : rows[0].id;
-      let max_id = (order < 0) ? rows[0].id : rows[rows.length-1].id;
-      for(var r of rows) {
-        var cur_board = new Board(r);
-        if(opts.include_meta || cur_board.score !== null) { boards.push(cur_board) };
-      }
-      cb({
-        boards: boards,
-        start: min_id,
-        end: max_id,
-      })
-    })
+    let boards = [];
+    let promises = [];
+    let self = this;
+    for(let q of qs) {
+      let curp = new Promise((resolve, reject) => {
+        self.db.all(q.query, q.params, function(err, rows) {
+          if(err) { console.log(err); reject(err) }
+          //console.log(rows);
+          //let min_id = (order < 0) ? rows[rows.length-1].id : rows[0].id;
+          //let max_id = (order < 0) ? rows[0].id : rows[rows.length-1].id;
+          for(var r of rows) {
+            var cur_board = new Board(r);
+            if(opts.include_meta || cur_board.score !== null) { boards.push(cur_board) };
+            console.log(JSON.stringify(cur_board));
+          }
+          resolve()
+        })
+      });
+      promises.push(curp);
+    }
+    Promise.all(promises)
+      .then(function(vals) { cb({ boards: boards }) })
+      .catch(function(err) { cb({ error: err }) })
   }
   
   getRaw(cb) {
