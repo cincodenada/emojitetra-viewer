@@ -21,6 +21,33 @@ function bin_search(a, value) {
     return null;
 }
 
+//for requiring a script loaded asynchronously.
+function loadAsync(src, callback, relative){
+    var baseUrl = "/";
+    var script = document.createElement('script');
+    if(relative === true){
+        script.src = baseUrl + src;  
+    }else{
+        script.src = src; 
+    }
+
+    if(callback !== null){
+        if (script.readyState) { // IE, incl. IE9
+            script.onreadystatechange = function() {
+                if (script.readyState == "loaded" || script.readyState == "complete") {
+                    script.onreadystatechange = null;
+                    callback();
+                }
+            };
+        } else {
+            script.onload = function() { // Other browsers
+                callback();
+            };
+        }
+    }
+    document.getElementsByTagName('head')[0].appendChild(script);
+}
+
 // Milliseconds between frames in "play mode"
 // It's a global, overwrite this to change the speed!
 // "play_delay = 250" in the console to get 4fps
@@ -227,10 +254,7 @@ function BoardBin() {
 function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   let emoji_ready = false;
   let emojify_elms = [];
-  let convertor = new EmojiConvertor();
-  convertor.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png";
-  convertor.img_set = "twitter";
-  convertor.use_sheet = true;
+  let convertor = null;
   
   function isLoaded(img) {
       // During the onload event, IE correctly identifies any images that
@@ -253,19 +277,33 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   
   function emojify() {
     if(activate_checkbox.checked) {
-      for(let elm of emojify_elms) {
-        elm.innerHTML = convertor.replace_unified(elm.innerHTML);
+      if(emoji_ready && convertor) {
+        for(let elm of emojify_elms) {
+          elm.innerHTML = convertor.replace_unified(elm.innerHTML);
+        }
       }
     }
   }
+  
+  if(notify_elm) { notify_elm.style.display = ""; }
+
+  loadAsync('emoji.min.js', function() {
+    convertor = new EmojiConvertor();
+    convertor.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png";
+    convertor.img_set = "twitter";
+    convertor.use_sheet = true;
+
+    if(notify_elm && emoji_ready) { notify_elm.style.display = "none"; }
+
+    emojify();
+  })
 
   if(isLoaded(emoji_sheet)) {
     emoji_ready = true;
   } else {
-    if(notify_elm) { notify_elm.style.display = ""; }
     emoji_sheet.addEventListener("load", function() {
       emoji_ready = true;
-      if(notify_elm) { notify_elm.style.display = "none"; }
+      if(notify_elm && convertor) { notify_elm.style.display = "none"; }
       emojify();
     });
   }
@@ -276,7 +314,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   
   this.register = function(elm) {
     emojify_elms.push(elm);
-    if(emoji_ready) {
+    if(emoji_ready && convertor) {
       emojify();
     }
   }
@@ -291,7 +329,6 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
     document.getElementById('replace_emoji'),
     document.getElementById('loading_emoji')
   );
-
   let boards = new BoardBin();
   let labels = ["↔️ Left or Right","⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
   let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
