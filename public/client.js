@@ -25,7 +25,6 @@ function bin_search(a, value) {
 // It's a global, overwrite this to change the speed!
 // "play_delay = 250" in the console to get 4fps
 let play_delay = 1000;
-var emoji = new EmojiConvertor();
 
 function BoardBin() {
   let boards = {};
@@ -88,30 +87,32 @@ function BoardBin() {
     if(ranges.length == 0) {
       ranges = [[start, end]]
     } else {
-      let prev = null;
-      for(let idx in ranges) {
-        let cur = ranges[idx];
+      let prev = next = null;
+      let idx = 0;
+      while(idx < ranges.length) {
+        next = ranges[idx];
         // Skip all the ones we start after
-        if(start < cur[0]) {
-          let overlap_prev = (prev && start <= prev[1])
-          let overlap_next = (end >= cur[0])
-          if(overlap_prev && overlap_next) {
-            // We may overlap multiple ranges
-            // Make sure we subsume them all
-            while(ranges[idx][0] <= cur[1]) {
-              prev[1] = Math.max(prev[1], ranges[idx][1]);
-              ranges.splice(idx,1);
-            }
-          } else if(overlap_prev) {
-            prev[1] = end
-          } else if(overlap_next) {
-            cur[0] = start
-          } else {
-            ranges.splice(idx, 0, [start, end])
-          }
-          return
+        if(start < next[0]) { break; }
+        idx++;
+        prev = next;
+        next = null;
+      }
+      
+      let overlap_prev = (prev && start <= prev[1])
+      let overlap_next = (next && end >= next[0])
+      if(overlap_prev && overlap_next) {
+        // We may overlap multiple ranges
+        // Make sure we subsume them all
+        while(ranges[idx][0] <= next[1]) {
+          prev[1] = Math.max(prev[1], ranges[idx][1]);
+          ranges.splice(idx,1);
         }
-        prev = cur;
+      } else if(overlap_prev) {
+        prev[1] = end
+      } else if(overlap_next) {
+        next[0] = start
+      } else {
+        ranges.splice(idx, 0, [start, end])
       }
     }
   }
@@ -177,13 +178,16 @@ function BoardBin() {
   this.getBoards = function(target_id, direction, cb) {
     let qs = "";
     if(target_id) {
+      // Request a little extra margin, to allow for various slop
+      // Mainly non-game tweets, which are fetched but not added
+      let comfy_chunk = Math.round(chunk_size*1.2)
       if(direction == 0) {
         // Unsupported currently
-        qs = '?around=' + target_id + '&count=' + chunk_size;        
+        qs = '?around=' + target_id + '&count=' + comfy_chunk;
       } else if(direction == 1) {
-        qs = '?after=' + target_id + '&count=' + chunk_size;        
+        qs = '?after=' + target_id + '&count=' + comfy_chunk;
       } else {
-        qs = '?before=' + target_id + '&count=' + chunk_size;        
+        qs = '?before=' + target_id + '&count=' + comfy_chunk;
       }
     }
     
@@ -197,7 +201,7 @@ function BoardBin() {
       dreamRequest.onload = function() {
         self.addBoards(JSON.parse(this.responseText), true)
         cur_request = null
-        cb()
+        if(cb) { cb() }
       };
       dreamRequest.open('get', '/boards' + qs);
       dreamRequest.send();
@@ -220,7 +224,74 @@ function BoardBin() {
   }
 }
 
+function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
+  let emoji_ready = false;
+  let emojify_elms = [];
+  let convertor = new EmojiConvertor();
+  convertor.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png";
+  convertor.img_set = "twitter";
+  convertor.use_sheet = true;
+  
+  function isLoaded(img) {
+      // During the onload event, IE correctly identifies any images that
+      // weren’t downloaded as not complete. Others should too. Gecko-based
+      // browsers act like NS4 in that they report this incorrectly.
+      if (!img.complete) {
+          return false;
+      }
+
+      // However, they do have two very useful properties: naturalWidth and
+      // naturalHeight. These give the true size of the image. If it failed
+      // to load, either of these should be zero.
+      if (img.naturalWidth === 0) {
+          return false;
+      }
+
+      // No other way of checking: assume it’s ok.
+      return true;
+  }
+  
+  function emojify() {
+    if(activate_checkbox.checked) {
+      for(let elm of emojify_elms) {
+        elm.innerHTML = convertor.replace_unified(elm.innerHTML);
+      }
+    }
+  }
+
+  if(isLoaded(emoji_sheet)) {
+    emoji_ready = true;
+  } else {
+    if(notify_elm) { notify_elm.style.display = ""; }
+    emoji_sheet.addEventListener("load", function() {
+      emoji_ready = true;
+      if(notify_elm) { notify_elm.style.display = "none"; }
+      emojify();
+    });
+  }
+  
+  activate_checkbox.onchange = function(event) {
+    emojify();
+  }
+  
+  this.register = function(elm) {
+    emojify_elms.push(elm);
+    if(emoji_ready) {
+      emojify();
+    }
+  }
+  this.clear = function() {
+    emojify_elms = [];
+  }
+}
+
 (function(){
+  let emojify = new EmojiWrapper(
+    document.getElementById('emoji_sheet'),
+    document.getElementById('replace_emoji'),
+    document.getElementById('loading_emoji')
+  );
+
   let boards = new BoardBin();
   let labels = ["↔️ Left or Right","⬅️ Left","➡️ Right","🔄 Rotate","⬇️ Down","⏬ Plummet","⬇️ Stop"];
   let rank_icons = ["🔹","🏆","🥇","🥈","🥉"];
@@ -255,10 +326,6 @@ function BoardBin() {
   }
   
   // Now get to the rest of the business...
-  emoji.img_sets.twitter.sheet="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png?1526257911219";
-  emoji.img_set = "twitter";
-  emoji.use_sheet = true;
-  
   // define variables that reference elements on our page
   const container = document.getElementById('current');
   const board = document.getElementById('board');
@@ -272,19 +339,10 @@ function BoardBin() {
   const date = document.getElementById('date');
   const permalink = document.getElementById('permalink');
   const fps = document.getElementById('fps');
-  const replaceEmoji = document.getElementById('replace_emoji');
   const board_re = [
     RegExp('^(\\d+)'),
     RegExp('Score (\\d+)'),
   ]
-  
-  const emojify = function(text) {
-    if(replaceEmoji.checked) {
-      return emoji.replace_unified(text);
-    }
-    return text
-  }
-
   
   const getSummary = function() {
     var flipped = boards.slice().reverse();
@@ -318,8 +376,7 @@ function BoardBin() {
     var row = document.createElement('div');
     var icon = document.createElement('span');
     icon.className = 'vote_icon';
-    label = rank_icons[rank] + label
-    icon.innerHTML = emojify(label);
+    icon.innerHTML = label;
     var bar = document.createElement('div');
     bar.style.width = 5*percent + "em";
     if(rank === 1) {
@@ -353,7 +410,10 @@ function BoardBin() {
       votes.innerHTML = "⌛ Poll in progress!";
     }
     
-    board.innerHTML = emojify(board.innerHTML);
+    // Clear the waitlist
+    emojify.clear();
+    emojify.register(votes)
+    emojify.register(board);
   }
   
   const setPoll = function(poll) {
@@ -454,10 +514,6 @@ function BoardBin() {
   nextStart.onclick = function(event) {
     clearInterval(play_timeout);
     stepStart(1);
-  }
-  
-  replaceEmoji.onchange = function(event) {
-    setBoard();
   }
   
   fps.onkeyup = function(event) {

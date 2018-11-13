@@ -34,6 +34,8 @@
     </script>
   </head>
   <body>
+    <!-- Pre-load emoji sheet -->
+    <img id="emoji_sheet" src="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png" style="display:none"/>
     <header>
       <h1>
         Emoji Tetra Replay
@@ -64,7 +66,7 @@
         </div>
       </section>
       <form class="options">
-        <label><input id="replace_emoji" type="checkbox" value="yep" checked="checked">Replace Emoji with Images</label><br/>
+        <label><input id="replace_emoji" type="checkbox" value="yep" checked="checked">Replace Emoji with Images</label> <span id="loading_emoji" style="display:none">(Loading...)</span></span><br/>
         <span>Replay Frames Per Second: <input autocomplete="off" id="fps" type="number" value="1"></span>
       </form>
       <section>        
@@ -79,11 +81,6 @@
       Made with <a href="https://glitch.com">Glitch</a> by <a href="https://twitter.com/cincodenada">@cincodenada</a>. Source on <a href="https://gitlab.com/cincodenada/emojitetra-viewer">GitLab</a> and <a href="https://glitch.com/~emojitetra-viewer">right here on Glitch</a><br/>
       Submit bug reports and/or ideas on the <a href="https://gitlab.com/cincodenada/emojitetra-viewer/issues">GitLab Issue Tracker</a><br/>
     </footer>
-    
-    
-    <!-- Emoji -->
-    <script src="/emoji.min.js"></script>
-
     
     <!-- import the webpage's client-side javascript file -->
     <script src="/client.js"></script>
