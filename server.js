@@ -32,6 +32,9 @@ var BoardStore = require('./board_store.js');
 var dbFile = './.data/sqlite.db';
 var exists = fs.existsSync(dbFile);
 var sqlite3 = require('sqlite3').verbose();
+var Promise = require("bluebird");
+Promise.promisifyAll(sqlite3)
+
 var db = new sqlite3.Database(dbFile);
 
 // if ./.data/sqlite.db does not exist, create it, otherwise print records to console
@@ -122,6 +125,26 @@ app.get("/fill", function(request, response) {
   response.send("Off it goes!")
 })
 
+app.get("/fetch/:start/:end", function(request, response) {
+  boards.getTweets(request.params.start, request.params.end, [], {
+    screen_name: 'emojitetra',
+    count: 200,
+  }, function(err, resp) {
+    console.log(resp);
+    if(err) { response.send("Error: " + err); }
+    else { response.send('<a href="/fetch/' + resp.continue.join('/') + '">Continue</a>') }
+  });
+})
+
+app.get("/fetch/:id", function(request, response) {
+  boards.getThread(request.params.id, request.query.count).then(resp => { 
+    let params = (request.query.count) ? '?count=' + request.query.count : '';
+    response.send('Added ' + resp.count + ' tweets. <a href="/fetch/' + resp.next + params + '">Continue?</a>') 
+  }).catch(err => {
+    response.status(500);
+    response.json(err);
+  })
+})
 
 app.get("/details/:id", function (request, response) {
   // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49

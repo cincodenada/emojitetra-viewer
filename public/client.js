@@ -22,6 +22,7 @@ function bin_search(a, value) {
 }
 
 //for requiring a script loaded asynchronously.
+//from https://stackoverflow.com/a/37157516/306323
 function loadAsync(src, callback, relative){
     var baseUrl = "/";
     var script = document.createElement('script');
@@ -69,10 +70,6 @@ function BoardBin() {
   const chunk_size = 50;
   let cur_request = null;
 
-  // TODO: Ugh, all this has to be bigints and shit
-  // Unless we index them by timestamps, which will still be unique for our case...yes...
-  // "Continuing", "Continued", and board will all have the same timestamp, but that's fine
-  // Cause we ignore those, yay
   // We could avoid is_continuous by checking in_reply_to, but Continuations make that annoying
   // So for now we'll just do some extra queries
   this.addBoards = function(board_data, is_continuous) {

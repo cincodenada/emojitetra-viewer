@@ -141,7 +141,7 @@ module.exports = class BoardStore {
             cb(null, tweet_counts);
             return;
           }
-          self.getDetails(tweet.id_str, (fulltweet) => {
+          self.getDetails(tweet.id_str).then((fulltweet) => {
             self.storeTweet(fulltweet, exists);
           })
           num_tweets++;
@@ -174,17 +174,15 @@ module.exports = class BoardStore {
     });
   }
   
-  getDetails(tweet_id, cb) {
+  getDetails(tweet_id) {
     var params = {
       'include_cards': 1,
       'cards_platform': 'iPhone-13',
     };
-    this.twitter.get('statuses/show/' + tweet_id + '.json', params, function(error, tweets, twitter_response) {
-      cb(tweets)
-    });
+    return this.twitter.get('statuses/show/' + tweet_id + '.json', params)
   }
   
-  storeTweet(tweet, exists) {
+  storeTweet(tweet, exists, cb) {
     console.log("Storing tweet " + tweet.id_str)
     var tweet_timestamp = new Date(tweet.created_at);
     var poll_data = {}
@@ -210,37 +208,38 @@ module.exports = class BoardStore {
       // Scope nonsense
       console.log("Checking for recency...");
       // Check if we have new data, and if so update the tweet and add it to the poll_data table
-      self.db.get("SELECT MAX(timestamp) AS recent FROM poll_data WHERE tweet_id = ?",tweet.id_str,function(err, timestamp) {
-        console.log(timestamp.recent)
-        console.log(poll_updated.getTime())
-        if(timestamp.recent < poll_updated.getTime()) {
-          console.log("Updating tweet " + tweet.id_str);
-          self.db.run("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str);
-          self.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
-        } else {
-          self.db.get("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str,function(err, data) {
-            if(data.cnt == 0) {
-              // I don't know how we get here, hopefully it's transient
-              self.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json,(err) => {
-                console.log("Inserted board")
-                console.log(err)
-              });
-            }
-          })
-        }
-      })
+      return self.db.getAsync("SELECT MAX(timestamp) AS recent FROM poll_data WHERE tweet_id = ?",tweet.id_str)
+        .then(timestamp => {
+          console.log(timestamp.recent)
+          console.log(poll_updated.getTime())
+          if(timestamp.recent < poll_updated.getTime()) {
+            console.log("Updating tweet " + tweet.id_str);
+            return Promise.all([
+              self.db.runAsync("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str),
+              self.db.runAsync("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
+            ])
+          } else {
+            return self.db.getAsync("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str)
+              .then(data => {
+                if(data.cnt == 0) {
+                  // I don't know how we get here, hopefully it's transient
+                  return self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json)
+                }
+              })
+              .then(result => { console.log("Inserted board") })
+          }
+        })
+        .catch(err => { console.log("Couldn't update board: " + err) })
     } else {
       console.log("Saving tweet " + tweet.id_str);
-      self.db.run("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json, (err) => {
-        if(err) { console.log("Couldn't save tweet: " + err); }
-        this.updateMeta(tweet.id_str);        
-      });
-      self.db.run("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json, (err) => {
-        if(err) { console.log("Couldn't save poll data: " + err); }
-      })
+      return Promise.all([
+        self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json)
+          .catch((err) => { console.log("Couldn't save tweet: " + err) })
+          .then(() => { this.updateMeta(tweet.id_str) }),
+        self.db.runAsync("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
+          .catch((err) => { console.log("Couldn't save poll data: " + err) })
+      ])
     }
-    
-    return true;
   }
   
   fillMissing() {
@@ -251,12 +250,32 @@ module.exports = class BoardStore {
                  'WHERE b2.id IS NULL AND prev_id != "" LIMIT 10', function(err, row) {
       if(!err) {
         console.log(row);
-        self.getDetails(row.prev_id, (fulltweet) => {
+        self.getDetails(row.prev_id).then((fulltweet) => {
           self.storeTweet(fulltweet, false);
           console.log("Recovering " + row.prev_id);
         })
       }
+    }, function() {
+      self.fillMissing();
     });
+  }
+  
+  getThread(tweet_id, max_tweets, depth) {
+    let self = this;
+    if(!max_tweets) { max_tweets = 20; }
+    if(!depth) { depth = 0; }
+    if(depth == max_tweets) { return {count: depth, next: tweet_id} }
+    return self.getDetails(tweet_id).then((fulltweet) => {
+      console.log("Recovering " + tweet_id);
+      self.storeTweet(fulltweet, false);
+      if(fulltweet.in_reply_to_status_id_str) {
+        return self.getThread(fulltweet.in_reply_to_status_id_str, max_tweets, depth + 1);
+      } else if(fulltweet.text.startsWith("Continuing")) {
+        return self.getThread(fulltweet.quoted_status_id_str, max_tweets, depth + 1);
+      } else {
+        return {count: depth, next: tweet_id}
+      }
+    })
   }
   
   updateMeta(tweet_id) {
@@ -414,12 +433,12 @@ module.exports = class BoardStore {
               output += "✔️"
             }
           }
-          output += '<a href="https://twitter.com/EmojiTetra/status/' + parsed.id_str + '">Board ' + parsed.created_at + '</a><br/>\n';
+          output += '<a href="/' + parsed.id_str + '">Board ' + parsed.created_at + '</a><br/>\n';
           expected_next = parsed.in_reply_to_status_id_str;
         } else if(parsed.text.indexOf("new thread") > -1) {
-          output += '<a href="https://twitter.com/EmojiTetra/status/' + parsed.id_str + '">Continuation ' + parsed.created_at + '</a><br/>\n';
+          output += '<a href="/' + parsed.id_str + '">Continuation ' + parsed.created_at + '</a><br/>\n';
         } else {
-          output += '<a href="https://twitter.com/EmojiTetra/status/' + parsed.id_str + '">Other: ' + parsed.text + ' @ ' + parsed.created_at + '</a><br/>\n';          
+          output += '<a href="/' + parsed.id_str + '">Other: ' + parsed.text + ' @ ' + parsed.created_at + '</a><br/>\n';          
         }
       }
       cb(output)

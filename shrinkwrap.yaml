@@ -1,5 +1,6 @@
 dependencies:
   big-integer: 1.6.32
+  bluebird: 3.5.3
   compression: 1.7.2
   express: 4.16.3
   nunjucks: 3.1.3
@@ -180,6 +181,10 @@ packages:
     optional: true
     resolution:
       integrity: sha1-RqoXUftqL5PuXmibsQh9SxTGwgU=
+  /bluebird/3.5.3:
+    dev: false
+    resolution:
+      integrity: sha512-/qKPUQlaW1OyR51WeCPBvRnAlnZFUJkCSG5HzGnuIqhgyJtF+T94lFnn33eiazjRm2LAHVy2guNnaq48X9SJuw==
   /body-parser/1.18.2:
     dependencies:
       bytes: 3.0.0
@@ -2208,6 +2213,7 @@ shrinkwrapMinorVersion: 9
 shrinkwrapVersion: 3
 specifiers:
   big-integer: ^1.6.32
+  bluebird: ^3.5.3
   compression: ^1.7.2
   express: ^4.16.3
   nunjucks: ^3.1.3
