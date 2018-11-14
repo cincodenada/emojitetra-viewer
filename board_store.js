@@ -280,55 +280,75 @@ module.exports = class BoardStore {
   
   updateMeta(tweet_id) {
     let self = this;
-    self.db.get('SELECT CAST(id AS STRING) id_str, board,' +
-                'json_extract(json, "$.in_reply_to_status_id_str") prev_id,' +
-                'json_extract(json, "$.retweet_count") retweets,' +
-                'json_extract(json, "$.favorite_count") favorites,' +
-                'board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end ' +
-                'FROM boards WHERE id=?',tweet_id, (err, board_info) => {
-      if(err) {
-        console.log("Error updating meta for " + tweet_id);
-        return;
-      }
-      // Look up to three boards back for the previous *board
-      let get_prev = function(board_id, cb, depth) {
-        if(!depth) { depth = 0; }
-        if(depth > 3) { cb("Board not found!", null, null); }
+    
+    let get_prev = function(board_id, cb, depth) {
+      if(!depth) { depth = 0; }
+      if(depth > 3) { cb("Board not found!", null, null); }
 
-        self.db.get('SELECT board, (board LIKE "%◽%") AS is_board, board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end,' +
-                    'json_extract(json, "$.in_reply_to_status_id_str") AS prev_id ' +
-                    'FROM boards WHERE id = ?', board_id, function(err, board) {
+      self.db.get(
+        'SELECT board, (board LIKE "%◽%") AS is_board, board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end,' +
+        'json_extract(json, "$.in_reply_to_status_id_str") AS prev_id,' +
+        'json_extract(json, "$.quoted_status_id_str") AS quoted_id ' +
+        'FROM boards WHERE id = ?', board_id,
+        function(err, board) {
+          console.log(board);
           if(err) {
             console.log("Error finding previous board to " + board_id);
+            cb("No board found: " + err, null, null);
             return;
           }
-          
           if(board) {
             if(board.is_board) {
-              cb(null, board_id, board.is_end)
+              cb(null, board_id, board.is_end);
             } else {
-              get_prev(board.prev_id, cb, depth+1);
+              let prev = board.prev_id || board.quoted_id;
+              if(prev) {
+                get_prev(prev, cb, depth+1);
+              } else {
+                cb("End of chain!", null, null);
+              }
             }
           } else {
             cb("Board not found!", null, null);
           }
-        })
-      }
-      
-      get_prev(board_info.prev_id, function(err, prev_id, prev_is_end) {
-        // If err, board will be null which is what we want
-        let score = parse_score(board_info.board);
-        let role = null;
-        if(board_info.is_end) {
-          role = "end";
-        } else if(prev_is_end) {
-          role = "start";
         }
-      
-        self.db.run("REPLACE INTO board_meta VALUES(?,?,?, ?,?, NULL,?,?)",
-                    board_info.id_str,board_info.prev_id,prev_id,
-                    score, role, board_info.retweets,board_info.favorites);
-      })
+      )
+    }
+
+    return self.db.getAsync(
+      'SELECT CAST(id AS STRING) id_str, board,' +
+      'json_extract(json, "$.in_reply_to_status_id_str") prev_id,' +
+      'json_extract(json, "$.retweet_count") retweets,' +
+      'json_extract(json, "$.favorite_count") favorites,' +
+      'board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end ' +
+      'FROM boards WHERE id=?',tweet_id)
+    .then(board_info => {
+      /*
+      if(err) {
+        console.log("Error updating meta for " + tweet_id);
+        return;
+      }
+      */
+      // Look up to three boards back for the previous *board
+      return new Promise((resolve, reject) => {
+        console.log("Finding previous board for " + board_info.prev_id);
+        get_prev(board_info.prev_id, function(err, prev_id, prev_is_end) {
+          // If err, board will be null which is what we want
+          let score = parse_score(board_info.board);
+          let role = null;
+          if(board_info.is_end) {
+            role = "end";
+          } else if(prev_is_end) {
+            role = "start";
+          }
+
+          self.db.runAsync("REPLACE INTO board_meta VALUES(?,?,?, ?,?, NULL,?,?)",
+                      board_info.id_str,board_info.prev_id,prev_id,
+                      score, role, board_info.retweets,board_info.favorites)
+            .then(res => resolve("Added meta for " + tweet_id))
+            .catch(err => reject(err))
+        })
+      });
     });
   }
   

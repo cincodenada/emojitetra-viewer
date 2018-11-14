@@ -180,8 +180,14 @@ app.get("/invalidate", function(request, response) {
   console.log("Requested Twitter Auth...");
 })
 
-app.get("/gen_meta", function(request, response) {
-  
+app.get("/gen_meta/:id", function(request, response) {
+  boards.updateMeta(request.params.id)
+    .then((blarp) => {
+      console.log(blarp);
+      return db.getAsync("SELECT * FROM board_meta WHERE board_id = ?", request.params.id)
+    })
+    .then(meta => { response.json(meta); })
+    .catch(err => { response.json(err); })
 })
 
 app.get("/auth", function (request, response) {
