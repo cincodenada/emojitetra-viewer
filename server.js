@@ -85,6 +85,7 @@ app.get("/boards", function (request, response) {
     before: request.query.before,
     after: request.query.after,
     around: request.query.around,
+    special: (request.query.special != undefined) ? true : false,
   }
   
   boards.getBoards(function(boards) {

@@ -332,7 +332,7 @@ module.exports = class BoardStore {
       query += 'WHERE b.id = ?'
       params = [tweet_id]
     } else {
-      query += "WHERE bm.score = -1 LIMIT " + parseInt(limit)
+      query += "WHERE bm.role IS NULL LIMIT " + parseInt(limit)
       params = []
     }
     console.log(query);
@@ -370,7 +370,8 @@ module.exports = class BoardStore {
     var order = order || -1;
     var sort_field = opts.sort_field || "timestamp"
     
-    var where = [], params = {};
+    console.log(opts)
+    var where = [], params = {}, join = "";
     if(opts.before) {
       where.push(sort_field + " <= $newest");
       params['$newest'] = opts.before;
@@ -380,6 +381,10 @@ module.exports = class BoardStore {
       where.push(sort_field + " >= $oldest");
       params['$oldest'] = opts.after;
       order = 1;
+    } else if(opts.special) {
+      where.push('role != ""')
+      join = "LEFT JOIN board_meta bm ON bm.board_id = id "
+
     }
     //params['$limit'] = parseInt(limit);
     
@@ -387,7 +392,7 @@ module.exports = class BoardStore {
     var order_str = (order > 0 ? "ASC" : "DESC");
     var where_str = "";
     if(where.length) { where_str = "WHERE " + where.join(" AND ") }
-    var query = "SELECT CAST(id AS TEXT) as id_str, board, timestamp, poll_data FROM boards " +
+    var query = "SELECT CAST(id AS TEXT) as id_str, board, timestamp, poll_data FROM boards " + join +
         where_str + " ORDER BY " + sort_field + " " + order_str + " LIMIT " + limit_int; 
     
     return {

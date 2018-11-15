@@ -7,18 +7,31 @@ Number.prototype.mod = function(n) {
 };
 
 // Binary search whee
-function bin_search(a, value) {
-    var lo = 0, hi = a.length - 1, mid;
-    while (lo <= hi) {
-        mid = Math.floor((lo+hi)/2);
-        if (a[mid] > value)
-            hi = mid - 1;
-        else if (a[mid] < value)
-            lo = mid + 1;
-        else
-            return mid;
+function bin_search(a, value, closest_dir, wrap) {
+  var lo = 0, hi = a.length - 1, mid;
+  while (lo <= hi) {
+    mid = Math.floor((lo+hi)/2);
+    if (a[mid] > value)
+      hi = mid - 1;
+    else if (a[mid] < value)
+      lo = mid + 1;
+    else
+      return mid;
+  }
+  
+  // Edge cases (heh)
+  if(lo == a.length && closest_dir != -1) { return wrap ? 0 : null; }
+  if(hi == -1 && closest_dir != 1) { return wrap ? a.length-1 : null; }  
+  
+  if(closest_dir) {
+    if(Math.sign(a[mid] - value) == closest_dir) {
+      return mid
+    } else {
+      return mid + closest_dir
     }
-    return null;
+  }
+  
+  return null;
 }
 
 //for requiring a script loaded asynchronously.
@@ -32,7 +45,7 @@ function loadAsync(src, callback, relative){
         script.src = src; 
     }
 
-    if(callback !== null){
+    if(callback !== null) {
         if (script.readyState) { // IE, incl. IE9
             script.onreadystatechange = function() {
                 if (script.readyState == "loaded" || script.readyState == "complete") {
@@ -66,6 +79,9 @@ function BoardBin() {
   let gaps_rev = {};
   // id: timestamp
   let id_map = {};
+  
+  // List of timestamps
+  let checkpoints = [];
   
   const chunk_size = 50;
   let cur_request = null;
@@ -185,7 +201,9 @@ function BoardBin() {
       let cur_idx = idx;
       for(let d=0; d < margin; d++) {
         if(gap_map[board_ts[cur_idx]] !== undefined) {
-          this.getBoards(board_ts[cur_idx], direction);
+          let target = board_ts[cur_idx];
+          if(direction == 0) { target = boards[target].id }
+          this.getBoards(target, direction);
           return true;
         } else if(cur_idx < 0 || cur_idx >= board_ts.length) {
           /// TODO: Deal with looping
@@ -198,20 +216,21 @@ function BoardBin() {
     return false;
   }
   
-  
-  this.getBoards = function(target_id, direction, cb) {
+  // target is a timestamp for before/after, tweet ID for around
+  // this is so we can load tweet ID's...bleh
+  this.getBoards = function(target, direction, cb) {
     let qs = "";
-    if(target_id) {
+    if(target) {
       // Request a little extra margin, to allow for various slop
       // Mainly non-game tweets, which are fetched but not added
       let comfy_chunk = Math.round(chunk_size*1.2)
       if(direction == 0) {
         // Unsupported currently
-        qs = '?around=' + target_id + '&count=' + comfy_chunk;
+        qs = '?around=' + target + '&count=' + comfy_chunk;
       } else if(direction == 1) {
-        qs = '?after=' + target_id + '&count=' + comfy_chunk;
+        qs = '?after=' + target + '&count=' + comfy_chunk;
       } else {
-        qs = '?before=' + target_id + '&count=' + comfy_chunk;
+        qs = '?before=' + target + '&count=' + comfy_chunk;
       }
     }
     
@@ -232,6 +251,19 @@ function BoardBin() {
     }
   }
   
+  this.getSpecial = function() {
+    let self = this;
+    let dreamRequest = new XMLHttpRequest();
+    dreamRequest.onload = function() {
+      let response = JSON.parse(this.responseText);
+      checkpoints = response.boards.map(b => b.timestamp);
+      checkpoints.sort();
+      self.addBoards(response, false);
+    };
+    dreamRequest.open('get', '/boards?special&count=10000');
+    dreamRequest.send();
+  }
+  
   this.getLast = function() {
     return boards[board_ts[board_ts.length - 1]];
   }
@@ -241,10 +273,19 @@ function BoardBin() {
   }
   
   this.getNext = function(from_ts, direction) {
-    let next_idx = bin_search(board_ts, from_ts) + direction;
+    return this.loadBoard(bin_search(board_ts, from_ts + direction, direction, true), direction);
+  }
+  
+  this.getCheckpoint = function(from_ts, direction) {
+    // We nudge by direction so we don't stay on the same one
+    let checkpoint_idx = bin_search(checkpoints, from_ts + direction, direction, true)
+    return this.getNext(checkpoints[checkpoint_idx], 0)
+  }
+  
+  this.loadBoard = function(idx, direction) {
     let self = this;
-    setTimeout(function() { self.ensureMargin(next_idx, direction, chunk_size-5) }, 0);
-    return boards[board_ts[next_idx]];
+    setTimeout(function() { self.ensureMargin(idx, direction, chunk_size-5) }, 0);
+    return boards[board_ts[idx]];
   }
 }
 
@@ -358,6 +399,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   } else {
     boards.getBoards(null, null, loadBoard)
   }
+  boards.getSpecial()
   
   // Now get to the rest of the business...
   // define variables that reference elements on our page
@@ -480,7 +522,8 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   }
   
   const stepStart = function(dir) {
-    if(dir == 1) {
+    /*
+   if(dir == 1) {
       for(var start_idx of starts) {
         if(start_idx < curboard) {
           setBoard(start_idx);
@@ -498,6 +541,9 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
       }
       setBoard(rev[0]);
     }
+    */
+    curboard = boards.getCheckpoint(curboard.timestamp, dir);
+    renderBoard(curboard);
   }
   
   const stepBoard = function(dir, first_load) {
