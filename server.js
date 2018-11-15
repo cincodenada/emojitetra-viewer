@@ -136,14 +136,40 @@ app.get("/fetch/:start/:end", function(request, response) {
   });
 })
 
-app.get("/fetch/:id", function(request, response) {
+app.get("/fetch_thread/:id", function(request, response) {
   boards.getThread(request.params.id, request.query.count).then(resp => { 
     let params = (request.query.count) ? '?count=' + request.query.count : '';
-    response.send('Added ' + resp.count + ' tweets. <a href="/fetch/' + resp.next + params + '">Continue?</a>') 
+    response.send('Added ' + resp.total + ' tweets. <a href="/fetch/' + resp.next + params + '">Continue?</a>') 
   }).catch(err => {
     response.status(500);
     response.json(err);
   })
+})
+
+app.get("/fetch/:id", function(request, response) {
+  let ids = request.params.id.split(',');
+  let promises = [];
+  for(let id of ids) {
+    promises.push(boards.getDetails(id).then(fulltweet => {
+      return boards.storeTweet(fulltweet, false);
+    }))
+  }
+  Promise.all(promises.map(p => {
+    return p.then(res => res, err => err)
+  })).then(all => {
+    response.json(all);
+  })
+})
+
+app.get("/non_boards", function(request, response) {
+  db.allAsync(
+    'SELECT CAST(id AS STRING) id_str FROM boards WHERE ' +
+    'board NOT LIKE "%◽%" AND ' +
+    'board NOT LIKE "Game continues%" AND ' +
+    'board NOT LIKE "Continuing game%"')
+  .then(rows => {
+    response.send(Array.from(rows).map(r => r.id).join("\n"));
+  });
 })
 
 app.get("/details/:id", function (request, response) {
@@ -152,6 +178,10 @@ app.get("/details/:id", function (request, response) {
     response.json(tweet);
   })
 });
+
+app.get("/search", function(request, response) {
+  boards.findOtherTweets().then(cnt => response.send("Found " + cnt + " results"))
+})
 
 app.get("/invalidate", function(request, response) {
   let body = 'access_token=' + token.access_token;
@@ -188,6 +218,32 @@ app.get("/gen_meta/:id", function(request, response) {
     })
     .then(meta => { response.json(meta); })
     .catch(err => { response.json(err); })
+})
+
+app.get("/fill_meta/:count", (request, response) => {
+  let query = 'INSERT INTO board_meta ' +
+    'SELECT id,' +
+    'COALESCE(' +
+      'json_extract(json, "$.in_reply_to_status_id_str"),' +
+      'json_extract(json, "$.quoted_status_id_str")' +
+    ') prev_id,' +
+    '(SELECT id FROM boards WHERE timestamp < b.timestamp AND board LIKE "%◽%" ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
+    'NULL score,' +
+    'NULL role,' +
+    'NULL replies,' +
+    'json_extract(json, "$.retweet_count"),' +
+    'json_extract(json, "$.favorite_count") ' +
+    'FROM boards b LEFT JOIN board_meta bm ON b.id = bm.board_id '+
+    'WHERE bm.board_id IS NULL ' +
+    'LIMIT ' + parseInt(request.params.count);
+  db.run(query, function(err) {
+    response.json({query: query, err: err, rows: this.count}) 
+  });
+})
+
+app.get("/calculate_meta/:tweet_id?", (request, response) => {
+  boards.calculateMeta(request.params.tweet_id, request.query.count)
+    .then(resp => response.json(resp))
 })
 
 app.get("/auth", function (request, response) {

@@ -1,4 +1,5 @@
 var BigInt = require("big-integer");
+var Promise = require("bluebird");
 
 function parse_score(board) {  
   const board_re = [
@@ -182,7 +183,7 @@ module.exports = class BoardStore {
     return this.twitter.get('statuses/show/' + tweet_id + '.json', params)
   }
   
-  storeTweet(tweet, exists, cb) {
+  storeTweet(tweet, exists) {
     console.log("Storing tweet " + tweet.id_str)
     var tweet_timestamp = new Date(tweet.created_at);
     var poll_data = {}
@@ -229,17 +230,32 @@ module.exports = class BoardStore {
               .then(result => { console.log("Inserted board") })
           }
         })
-        .catch(err => { console.log("Couldn't update board: " + err) })
     } else {
       console.log("Saving tweet " + tweet.id_str);
       return Promise.all([
         self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json)
-          .catch((err) => { console.log("Couldn't save tweet: " + err) })
           .then(() => { this.updateMeta(tweet.id_str) }),
         self.db.runAsync("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
-          .catch((err) => { console.log("Couldn't save poll data: " + err) })
       ])
     }
+  }
+  
+  findOtherTweets() {
+    let self = this;
+    return self.twitter.get('search/tweets', {
+      q: '-◽ -"Game continues" -"Continuing game" from:emojitetra',
+      result_type: 'recent',
+      count: 100,
+    }).then(tweets => {
+      for(let t of tweets.statuses) {
+        self.db.getAsync("SELECT id FROM boards WHERE id = ?", t.id_str).then(row => {
+          if(!row) {
+            self.storeTweet(t, false);
+          }
+        })
+      }
+      return tweets.statuses.length;
+    })
   }
   
   fillMissing() {
@@ -264,7 +280,7 @@ module.exports = class BoardStore {
     let self = this;
     if(!max_tweets) { max_tweets = 20; }
     if(!depth) { depth = 0; }
-    if(depth == max_tweets) { return {count: depth, next: tweet_id} }
+    if(depth == max_tweets) { return {total: depth, next: tweet_id} }
     return self.getDetails(tweet_id).then((fulltweet) => {
       console.log("Recovering " + tweet_id);
       self.storeTweet(fulltweet, false);
@@ -280,76 +296,72 @@ module.exports = class BoardStore {
   
   updateMeta(tweet_id) {
     let self = this;
+    let query = 
+      'SELECT id,' +
+      'COALESCE(' +
+        'json_extract(json, "$.in_reply_to_status_id_str"),' +
+        'json_extract(json, "$.quoted_status_id_str")' +
+      ') prev_id,' +
+      '(SELECT id FROM boards WHERE timestamp < b.timestamp AND board LIKE "%◽%" ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
+      'NULL score,' +
+      'NULL role,' +
+      'NULL replies,' +
+      'json_extract(json, "$.retweet_count"),' +
+      'json_extract(json, "$.favorite_count") ' +
+      'FROM boards b '+
+      'WHERE b.id = ?';
     
-    let get_prev = function(board_id, cb, depth) {
-      if(!depth) { depth = 0; }
-      if(depth > 3) { cb("Board not found!", null, null); }
-
-      self.db.get(
-        'SELECT board, (board LIKE "%◽%") AS is_board, board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end,' +
-        'json_extract(json, "$.in_reply_to_status_id_str") AS prev_id,' +
-        'json_extract(json, "$.quoted_status_id_str") AS quoted_id ' +
-        'FROM boards WHERE id = ?', board_id,
-        function(err, board) {
-          console.log(board);
-          if(err) {
-            console.log("Error finding previous board to " + board_id);
-            cb("No board found: " + err, null, null);
-            return;
-          }
-          if(board) {
-            if(board.is_board) {
-              cb(null, board_id, board.is_end);
-            } else {
-              let prev = board.prev_id || board.quoted_id;
-              if(prev) {
-                get_prev(prev, cb, depth+1);
-              } else {
-                cb("End of chain!", null, null);
-              }
-            }
-          } else {
-            cb("Board not found!", null, null);
-          }
-        }
-      )
+    return self.db.runAsync('REPLACE INTO board_meta ' + query, tweet_id)
+      .then(res => {
+        return self.calculateMeta(tweet_id);
+      })
+  }
+  
+  calculateMeta(tweet_id, limit) {
+    let self = this
+    let query = 
+      'SELECT CAST(b.id AS TEXT) id_str, b.board,' +
+      'b.board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end,'+
+      'pb.board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_start ' +
+      'FROM board_meta bm ' +
+        'LEFT JOIN board_meta pbm ON pbm.board_id=bm.prev_board_id ' +
+        'LEFT JOIN boards b ON b.id=bm.board_id ' +
+        'LEFT JOIN boards pb ON pb.id=pbm.board_id ';
+    let params;
+    if(tweet_id) {
+      query += 'WHERE b.id = ?'
+      params = [tweet_id]
+    } else {
+      query += "WHERE bm.score = -1 LIMIT " + parseInt(limit)
+      params = []
     }
-
-    return self.db.getAsync(
-      'SELECT CAST(id AS STRING) id_str, board,' +
-      'json_extract(json, "$.in_reply_to_status_id_str") prev_id,' +
-      'json_extract(json, "$.retweet_count") retweets,' +
-      'json_extract(json, "$.favorite_count") favorites,' +
-      'board LIKE "%🇬 🇦 🇲 🇪%🇴 🇻 🇪 🇷%" AS is_end ' +
-      'FROM boards WHERE id=?',tweet_id)
-    .then(board_info => {
-      /*
-      if(err) {
-        console.log("Error updating meta for " + tweet_id);
-        return;
+    console.log(query);
+  
+    return self.db.allAsync(query, params).then(boards => {
+      let promises = boards.map(board => {
+        let role = "";
+        if(board.is_end) { role = "end"; }
+        if(board.is_start) { role = "start"; }
+        if(board.is_end && board.is_start) { console.log("End and start!!"); }
+        let params = [parse_score(board.board), role, board.id_str]
+        console.log(board);
+        console.log(params);
+        return new Promise((resolve, reject) => {
+          self.db.run(
+            'UPDATE board_meta SET score = ?, role = ? WHERE board_id = ?',
+            params,
+            (err) => {
+              if(err) { reject(err); }
+              else { resolve({id: board.id_str, changes: this.changes}) }
+            })
+        }).then(res => res, err => ({status: "Error", error: err})) // Reflect this
+      })
+      if(promises.length == 1) {
+        return promises[0];
+      } else {
+        return Promise.all(promises);
       }
-      */
-      // Look up to three boards back for the previous *board
-      return new Promise((resolve, reject) => {
-        console.log("Finding previous board for " + board_info.prev_id);
-        get_prev(board_info.prev_id, function(err, prev_id, prev_is_end) {
-          // If err, board will be null which is what we want
-          let score = parse_score(board_info.board);
-          let role = null;
-          if(board_info.is_end) {
-            role = "end";
-          } else if(prev_is_end) {
-            role = "start";
-          }
-
-          self.db.runAsync("REPLACE INTO board_meta VALUES(?,?,?, ?,?, NULL,?,?)",
-                      board_info.id_str,board_info.prev_id,prev_id,
-                      score, role, board_info.retweets,board_info.favorites)
-            .then(res => resolve("Added meta for " + tweet_id))
-            .catch(err => reject(err))
-        })
-      });
-    });
+    })
   }
   
   makeQuery(opts) {
