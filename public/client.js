@@ -251,7 +251,7 @@ function BoardBin() {
     }
   }
   
-  this.getSpecial = function() {
+  this.getSpecial = function(cb) {
     let self = this;
     let dreamRequest = new XMLHttpRequest();
     dreamRequest.onload = function() {
@@ -259,6 +259,7 @@ function BoardBin() {
       checkpoints = response.boards.map(b => b.timestamp);
       checkpoints.sort();
       self.addBoards(response, false);
+      if(cb) { cb() }
     };
     dreamRequest.open('get', '/boards?special&count=10000');
     dreamRequest.send();
@@ -286,6 +287,12 @@ function BoardBin() {
     let self = this;
     setTimeout(function() { self.ensureMargin(idx, direction, chunk_size-5) }, 0);
     return boards[board_ts[idx]];
+  }
+  
+  this.getScores = function() {
+    let final_scores = checkpoints.filter(function(ts) { return boards[ts].score > 0; });
+    final_scores.sort(function(a,b) { return boards[b].score-boards[a].score; });
+    return final_scores.map(function(ts) { return boards[ts] });
   }
 }
 
@@ -379,7 +386,6 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   // Board callback function
   const loadBoard = function() {
     // parse our response to convert to JSON
-    //getSummary()
     if(cur_tweet) {
       curboard = boards.getId(cur_tweet);
     } else {
@@ -399,7 +405,23 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   } else {
     boards.getBoards(null, null, loadBoard)
   }
-  boards.getSpecial()
+  boards.getSpecial(function() {
+    let final_boards = boards.getScores();
+    high_scores.innerHTML = "";
+    for(var b of final_boards.slice(0,5)) {
+      var link = document.createElement('a')
+      link.href = '/' + b.id;
+      link.innerText = b.score;
+      high_scores.append(link);
+      // If we're not an endgame, we're the current game
+      if(!b.role) {
+        let tag = document.createElement('b');
+        tag.innerText = " *Current Game*";
+        high_scores.append(tag)
+      }
+      high_scores.append(document.createElement('br'))
+    }
+  })
   
   // Now get to the rest of the business...
   // define variables that reference elements on our page
@@ -419,33 +441,6 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
     RegExp('^(\\d+)'),
     RegExp('Score (\\d+)'),
   ]
-  
-  const getSummary = function() {
-    var flipped = boards.slice().reverse();
-    var last_score = null;
-    for(var idx in flipped) {
-      var b = flipped[idx];
-      var fwd_idx = flipped.length - idx - 1;
-      if(b.score == 0 && last_score !== 0) { 
-        if(fwd_idx < flipped.length - 1) { starts.push(fwd_idx+1); }
-        starts.push(fwd_idx);
-        if(last_score) { final_boards.push(fwd_idx+1); }
-      }
-      last_score = b.score;
-      idmap[b.id] = fwd_idx;
-    }
-    if(starts[starts.length-1] != 0) { starts.push(0); }
-    final_boards.sort(function(a,b) { return boards[b].score-boards[a].score; });
-    high_scores.innerHTML = "";
-    for(var final_idx of final_boards.slice(0,3)) {
-      var b = boards[final_idx];
-      var link = document.createElement('a')
-      link.href = '/' + b.id;
-      link.innerText = b.score;
-      high_scores.append(link);
-      high_scores.append(document.createElement('br'))
-    }
-  }
   
   const buildPollElement = function(label, percent, val, rank) {
     if(!rank) { rank = 0 }
@@ -543,6 +538,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
     }
     */
     curboard = boards.getCheckpoint(curboard.timestamp, dir);
+    
     renderBoard(curboard);
   }
   

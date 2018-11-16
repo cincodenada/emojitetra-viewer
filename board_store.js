@@ -24,8 +24,9 @@ class Board {
     this.board = board_info.board;
     this.id = BigInt(board_info.id_str);
     this.timestamp = board_info.timestamp;
-    this.parsePoll(board_info.poll_data);
     this.score = parse_score(this.board);
+    this.role = board_info.role;
+    this.parsePoll(board_info.poll_data);
   }
   
   parsePoll(poll_json) {
@@ -370,8 +371,10 @@ module.exports = class BoardStore {
     var order = order || -1;
     var sort_field = opts.sort_field || "timestamp"
     
-    console.log(opts)
-    var where = [], params = {}, join = "";
+        console.log(opts)
+    var where = [], params = {};
+    let join = ''
+    let fields = ['CAST(id AS TEXT) as id_str', 'board', 'timestamp', 'poll_data', 'role']
     if(opts.before) {
       where.push(sort_field + " <= $newest");
       params['$newest'] = opts.before;
@@ -382,9 +385,7 @@ module.exports = class BoardStore {
       params['$oldest'] = opts.after;
       order = 1;
     } else if(opts.special) {
-      where.push('role != ""')
-      join = "LEFT JOIN board_meta bm ON bm.board_id = id "
-
+      where.push('role != "" OR id = (SELECT MAX(id) FROM boards)')
     }
     //params['$limit'] = parseInt(limit);
     
@@ -392,7 +393,7 @@ module.exports = class BoardStore {
     var order_str = (order > 0 ? "ASC" : "DESC");
     var where_str = "";
     if(where.length) { where_str = "WHERE " + where.join(" AND ") }
-    var query = "SELECT CAST(id AS TEXT) as id_str, board, timestamp, poll_data FROM boards " + join +
+    var query = "SELECT " + fields.join(',') + " FROM boards LEFT JOIN board_meta bm ON bm.board_id = id " +
         where_str + " ORDER BY " + sort_field + " " + order_str + " LIMIT " + limit_int; 
     
     return {
