@@ -65,21 +65,13 @@ const board_cache = './.data/board_cache.json';
 const board_precache = './.data/board_precache.json';
 const preload_boards = 10;
 
-// http://expressjs.com/en/starter/basic-routing.html
+//========================
+// Web client API methods
+//========================
+
+// Fetches a range of boards from the database
 app.get("/boards", function (request, response) {
   console.log("Requesting boards...")
-  /*
-  if(!request.query.force) {
-    try {
-      response.setHeader("content-type", "application/json");
-      fs.statSync(__dirname + '/' + board_cache);
-      fs.createReadStream(__dirname + '/' + board_cache).pipe(response);
-      return
-    } catch(e) {
-      console.log("Generating fresh");
-    }
-  }
-  */
   let options = {
     limit: request.query.count || preload_boards,
     before: request.query.before,
@@ -89,100 +81,69 @@ app.get("/boards", function (request, response) {
   }
   
   boards.getBoards(function(boards) {
-    // TODO: Stream this?
-    /*
-    fs.writeFile(__dirname + '/' + board_cache, JSON.stringify(boards), (err) => {
-      console.log("Wrote file!")
-      console.log(err)
-    });
-    */
-    console.log("Writing response")
     response.json(boards);
   }, options)
 });
 
+// Call to go fetch the latest tweets.
+// I have my webserver just calling this from a cron job
 app.get("/update", function (request, response) {
   boards.update({
     screen_name: 'emojitetra',
     count: 200,
     backfill: request.query.backfill,
   }, (resp) => {
-    console.log(resp);
-    fs.unlink(board_cache, (err) => {
-      console.log(err);
-      response.json(resp);
-    })
+    response.json(resp);
   })
 });
 
-app.get("/check", function(request, response) {
-  boards.getRaw(function(boards) {
-    response.send(boards)
+app.get("/:id?", function (request, response) {
+  console.log(request.params.id)
+  response.render(__dirname + '/views/index.html', {
+    tweet_id: request.params.id,
+    play_speed: request.query.play_speed,
   });
-})
-
-app.get("/fill", function(request, response) {
-  boards.fillMissing();
-  response.send("Off it goes!")
-})
-
-app.get("/fetch/:start/:end", function(request, response) {
-  boards.getTweets(request.params.start, request.params.end, [], {
-    screen_name: 'emojitetra',
-    count: 200,
-  }, function(err, resp) {
-    console.log(resp);
-    if(err) { response.send("Error: " + err); }
-    else { response.send('<a href="/fetch/' + resp.continue.join('/') + '">Continue</a>') }
-  });
-})
-
-app.get("/fetch_thread/:id", function(request, response) {
-  boards.getThread(request.params.id, request.query.count).then(resp => { 
-    let params = (request.query.count) ? '?count=' + request.query.count : '';
-    response.send('Added ' + resp.total + ' tweets. <a href="/fetch/' + resp.next + params + '">Continue?</a>') 
-  }).catch(err => {
-    response.status(500);
-    response.json(err);
-  })
-})
-
-app.get("/fetch/:id", function(request, response) {
-  let ids = request.params.id.split(',');
-  let promises = [];
-  for(let id of ids) {
-    promises.push(boards.getDetails(id).then(fulltweet => {
-      return boards.storeTweet(fulltweet, false);
-    }))
-  }
-  Promise.all(promises.map(p => {
-    return p.then(res => res, err => err)
-  })).then(all => {
-    response.json(all);
-  })
-})
-
-app.get("/non_boards", function(request, response) {
-  db.allAsync(
-    'SELECT CAST(id AS STRING) id_str FROM boards WHERE ' +
-    'board NOT LIKE "%◽%" AND ' +
-    'board NOT LIKE "Game continues%" AND ' +
-    'board NOT LIKE "Continuing game%"')
-  .then(rows => {
-    response.send(Array.from(rows).map(r => r.id).join("\n"));
-  });
-})
-
-app.get("/details/:id", function (request, response) {
-  // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
-  var res = boards.getDetails(request.params.id, (tweet) => {
-    response.json(tweet);
-  })
 });
 
-app.get("/search", function(request, response) {
-  boards.findOtherTweets().then(cnt => response.send("Found " + cnt + " results"))
-})
+//========================
+// Twitter auth endpoints
+//========================
+
+
+app.get("/auth", function (request, response) {
+  let body = 'grant_type=client_credentials';
+  let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
+  let authRequest = https.request({
+    hostname: 'api.twitter.com',
+    path: '/oauth2/token',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      'Content-Length': Buffer.byteLength(body),
+      'Authorization': 'Basic ' + auth.toString('base64'),
+    }
+  }, (res) => {
+    console.log("Got response...");
+    let data = ""
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => { data += chunk });
+    res.on('end', () => {
+      console.log("Finished response...");
+      fs.writeFile('./.data/token.json', data, (err) => {
+        if(err) {
+          console.log("Error saving token: " + err.code);
+          response.send(JSON.stringify(err));
+        } else {
+          response.send(data)
+        }
+      })
+    });
+  });
+  console.log("Requesting Twitter Auth...");
+  authRequest.write('grant_type=client_credentials');
+  authRequest.end();
+  console.log("Requested Twitter Auth...");
+});
 
 app.get("/invalidate", function(request, response) {
   let body = 'access_token=' + token.access_token;
@@ -209,6 +170,69 @@ app.get("/invalidate", function(request, response) {
   authRequest.write(body);
   authRequest.end();
   console.log("Requested Twitter Auth...");
+})
+
+//=================================================
+// Aaaand below lie a bunch of junk drawer methods
+// which I use to maintain and debug stuff
+//=================================================
+
+app.get("/check", function(request, response) {
+  boards.getRaw(function(boards) {
+    response.send(boards)
+  });
+})
+
+app.get("/fill", function(request, response) {
+  boards.fillMissing();
+  response.send("Off it goes!")
+})
+
+app.get("/fetch/:start/:end", function(request, response) {
+  boards.getTweets(request.params.start, request.params.end, [], {
+    screen_name: 'emojitetra',
+    count: 200,
+  }, function(err, resp) {
+    console.log(resp);
+    if(err) { response.send("Error: " + err); }
+    else { response.send('<a href="/fetch/' + resp.continue.join('/') + '">Continue</a>') }
+  });
+})
+
+app.get("/fetch/:id", function(request, response) {
+  let ids = request.params.id.split(',');
+  let promises = [];
+  for(let id of ids) {
+    promises.push(boards.getDetails(id).then(fulltweet => {
+      return boards.storeTweet(fulltweet, false);
+    }))
+  }
+  Promise.all(promises.map(p => {
+    return p.then(res => res, err => err)
+  })).then(all => {
+    response.json(all);
+  })
+})
+
+app.get("/fetch_thread/:id", function(request, response) {
+  boards.getThread(request.params.id, request.query.count).then(resp => { 
+    let params = (request.query.count) ? '?count=' + request.query.count : '';
+    response.send('Added ' + resp.total + ' tweets. <a href="/fetch/' + resp.next + params + '">Continue?</a>') 
+  }).catch(err => {
+    response.status(500);
+    response.json(err);
+  })
+})
+
+app.get("/details/:id", function (request, response) {
+  // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
+  var res = boards.getDetails(request.params.id, (tweet) => {
+    response.json(tweet);
+  })
+});
+
+app.get("/search", function(request, response) {
+  boards.findOtherTweets().then(cnt => response.send("Found " + cnt + " results"))
 })
 
 app.get("/gen_meta/:id", function(request, response) {
@@ -246,50 +270,6 @@ app.get("/calculate_meta/:tweet_id?", (request, response) => {
   boards.calculateMeta(request.params.tweet_id, request.query.count)
     .then(resp => response.json(resp))
 })
-
-app.get("/auth", function (request, response) {
-  let body = 'grant_type=client_credentials';
-  let auth = Buffer(process.env.TWITTER_KEY + ":" + process.env.TWITTER_SECRET);
-  let authRequest = https.request({
-    hostname: 'api.twitter.com',
-    path: '/oauth2/token',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      'Content-Length': Buffer.byteLength(body),
-      'Authorization': 'Basic ' + auth.toString('base64'),
-    }
-  }, (res) => {
-    console.log("Got response...");
-    let data = ""
-    res.setEncoding('utf8');
-    res.on('data', (chunk) => { data += chunk });
-    res.on('end', () => {
-      console.log("Finished response...");
-      fs.writeFile('./.data/token.json', data, (err) => {
-        if(err) {
-          console.log("Error saving token: " + err.code);
-          response.send(JSON.stringify(err));
-        } else {
-          response.send(data)
-        }
-      })
-    });
-  });
-  console.log("Requesting Twitter Auth...");
-  authRequest.write('grant_type=client_credentials');
-  authRequest.end();
-  console.log("Requested Twitter Auth...");
-});
-
-
-app.get("/:id?", function (request, response) {
-  console.log(request.params.id)
-  response.render(__dirname + '/views/index.html', {
-    tweet_id: request.params.id,
-    play_speed: request.query.play_speed,
-  });
-});
 
 // listen for requests :)
 var listener = app.listen(process.env.PORT, function () {
