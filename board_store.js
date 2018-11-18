@@ -286,7 +286,7 @@ module.exports = class BoardStore {
       console.log("Recovering " + tweet_id);
       self.storeTweet(fulltweet, false);
       if(fulltweet.in_reply_to_status_id_str) {
-        return self.getThread(fulltweet.in_reply_to_status_id_str, max_tweets, depth + 1);
+          return self.getThread(fulltweet.in_reply_to_status_id_str, max_tweets, depth + 1);
       } else if(fulltweet.text.startsWith("Continuing")) {
         return self.getThread(fulltweet.quoted_status_id_str, max_tweets, depth + 1);
       } else {
@@ -312,8 +312,11 @@ module.exports = class BoardStore {
       'FROM boards b '+
       'WHERE b.id = ?';
     
+    console.log("Updating meta for tweet " + tweet_id);
+    console.log('REPLACE INTO board_meta ' + query);
     return self.db.runAsync('REPLACE INTO board_meta ' + query, tweet_id)
       .then(res => {
+        console.log("Updated board meta for tweet " + tweet_id + ", doing calculations...");
         return self.calculateMeta(tweet_id);
       })
   }
@@ -336,6 +339,7 @@ module.exports = class BoardStore {
       query += "WHERE bm.role IS NULL LIMIT " + parseInt(limit)
       params = []
     }
+    console.log("Calculating meta for " + (tweet_id || ("limit " + limit)))
     console.log(query);
   
     return self.db.allAsync(query, params).then(boards => {
