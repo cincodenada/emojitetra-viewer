@@ -127,7 +127,8 @@ function BoardBin() {
     if(ranges.length == 0) {
       ranges = [[start, end]]
     } else {
-      let prev = next = null;
+      let prev = null
+      let next = null;
       let idx = 0;
       while(idx < ranges.length) {
         next = ranges[idx];
@@ -143,7 +144,7 @@ function BoardBin() {
       if(overlap_prev && overlap_next) {
         // We may overlap multiple ranges
         // Make sure we subsume them all
-        while(ranges[idx][0] <= next[1]) {
+        while(ranges[idx] && ranges[idx][0] <= next[1]) {
           prev[1] = Math.max(prev[1], ranges[idx][1]);
           ranges.splice(idx,1);
         }
@@ -151,6 +152,13 @@ function BoardBin() {
         prev[1] = end
       } else if(overlap_next) {
         next[0] = start
+        next[1] = Math.max(next[1], end)
+        
+        idx++;
+        while(ranges[idx] && ranges[idx][0] <= next[1]) {
+          next[1] = Math.max(next[1], ranges[idx][1]);
+          ranges.splice(idx,1);
+        }
       } else {
         ranges.splice(idx, 0, [start, end])
       }
@@ -171,17 +179,17 @@ function BoardBin() {
       }
       prev = r;
     }
-    if(prev) {
-      gaps_fwd[prev[1]] = 1
+    if(prev && prev[1] < board_ts[board_ts.length-1]) {
+      gaps_fwd[prev[1]] = prev[1]
     }
   }
   
-  this.getContainingRange = function(id) {
+  this.getContainingRange = function(ts) {
     let prev = null
     for(let cur of ranges) {
       // Go until we pass our number
-      if(id < cur[0]) {
-        if(prev && id <= prev[1]) {
+      if(ts < cur[0]) {
+        if(prev && ts <= prev[1]) {
           // If we're in the previous range, bingo
           return prev;
         } else {
@@ -197,23 +205,37 @@ function BoardBin() {
   // But this'll work and that would be complicated
   this.ensureMargin = function(idx, direction, margin) {
     let gap_map = (direction < 0) ? gaps_rev : gaps_fwd;
+    let looped = false;
     if(idx !== null) {
       let cur_idx = idx;
       for(let d=0; d < margin; d++) {
         if(gap_map[board_ts[cur_idx]] !== undefined) {
           let target = board_ts[cur_idx];
           if(direction == 0) { target = boards[target].id }
-          this.getBoards(target, direction);
-          return true;
-        } else if(cur_idx < 0 || cur_idx >= board_ts.length) {
-          /// TODO: Deal with looping
-          console.log("Ack, reached end!")
+          let promise = this.getBoards(target, direction);
+          // If we need this board, wait on it
+          if(d == 0) { return promise; }
+          else { return Promise.resolve(true); }
+        } else if(!looped && cur_idx < 0) {
+          // Loop, and decrement d so we try this board again
+          cur_idx = board_ts.length;
+          d--;
+          looped = true;
+        } else if(!looped && cur_idx >= board_ts.length) {
+          // Ditto for the other direction
+          cur_idx = -1;
+          d--;
+          looped = true;
         }
         cur_idx += direction;
+        // If we loop again, we're good
+        if(looped && (cur_idx >= board_ts.length || cur_idx < 0)) { 
+          return Promise.resolve(true);
+        }
       }
     }
     // TODO: else (shouldn't happen?)
-    return false;
+    return Promise.resolve(false);
   }
   
   // target is a timestamp for before/after, tweet ID for around
@@ -225,7 +247,6 @@ function BoardBin() {
       // Mainly non-game tweets, which are fetched but not added
       let comfy_chunk = Math.round(chunk_size*1.2)
       if(direction == 0) {
-        // Unsupported currently
         qs = '?around=' + target + '&count=' + comfy_chunk;
       } else if(direction == 1) {
         qs = '?after=' + target + '&count=' + comfy_chunk;
@@ -236,19 +257,22 @@ function BoardBin() {
     
     // Load the boards!
     // These come back total unordered at this point
-    // TODO: Check the id of the request? Hmm
+    // TODO: Check to make sure this request covers us? Hmmm
     if(!cur_request) {
-      cur_request = qs;
-      let self = this;
-      let dreamRequest = new XMLHttpRequest();
-      dreamRequest.onload = function() {
-        self.addBoards(JSON.parse(this.responseText), true)
-        cur_request = null
-        if(cb) { cb() }
-      };
-      dreamRequest.open('get', '/boards' + qs);
-      dreamRequest.send();
+      cur_request = new Promise((resolve, reject) => {
+        let self = this;
+        let dreamRequest = new XMLHttpRequest();
+        dreamRequest.onload = function() {
+          self.addBoards(JSON.parse(this.responseText), true)
+          cur_request = null
+          if(cb) { cb() }
+          resolve();
+        };
+        dreamRequest.open('get', '/boards' + qs);
+        dreamRequest.send();
+      });
     }
+    return cur_request;
   }
   
   this.getSpecial = function(cb) {
@@ -265,12 +289,23 @@ function BoardBin() {
     dreamRequest.send();
   }
   
-  this.getLast = function() {
-    return boards[board_ts[board_ts.length - 1]];
+  this.getLatest = function() {
+    // Run the default 
+    let load = board_ts.length ? Promise.resolve() : this.getBoards();
+    return load.then(() => {
+      return boards[board_ts[board_ts.length-1]];
+    });
   }
   
   this.getId = function(tweet_id) {
-    return boards[id_map[tweet_id]];
+    let idx = bin_search(board_ts, id_map[tweet_id])
+    if(idx) {
+      return this.loadBoard(idx, 0);
+    } else {
+      return this.getBoards(tweet_id, 0).then(() => {
+        return boards[id_map[tweet_id]];
+      })
+    }
   }
   
   this.getNext = function(from_ts, direction) {
@@ -284,9 +319,11 @@ function BoardBin() {
   }
   
   this.loadBoard = function(idx, direction) {
-    let self = this;
-    setTimeout(function() { self.ensureMargin(idx, direction, chunk_size-5) }, 0);
-    return boards[board_ts[idx]];
+    // Return a promise, which is just for timing: wait until we're sure
+    // that we can load this board
+    return this.ensureMargin(idx, direction, chunk_size).then(() => {
+      return boards[board_ts[idx]];
+    })
   }
   
   this.getScores = function() {
@@ -382,29 +419,18 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   let starts = [];
   let final_boards = [];
   let idmap = {};
-
-  // Board callback function
-  const loadBoard = function() {
-    // parse our response to convert to JSON
-    if(cur_tweet) {
-      curboard = boards.getId(cur_tweet);
-    } else {
-      curboard = boards.getLast();
-    }
-    renderBoard(curboard);
-      
-    // If we have a play speed param, set it and start playing
-    if(play_speed) {
-      set_fps(play_speed);
-      play_step();
-    }
+  
+  // If we have a play speed param, set it
+  if(play_speed) {
+    set_fps(play_speed);
   }
   
-  if(cur_tweet) {
-    boards.getBoards(cur_tweet, 0, loadBoard)
-  } else {
-    boards.getBoards(null, null, loadBoard)
-  }
+  let load_boards = cur_tweet ? boards.getId(cur_tweet) : boards.getLatest();
+  load_boards.then(board => {
+    renderBoard(board)
+    if(play_speed) { play_step(); }
+  });
+  
   boards.getSpecial(function() {
     let final_boards = boards.getScores();
     high_scores.innerHTML = "";
@@ -434,6 +460,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   const play = document.getElementById('play');
   const next = document.getElementById('next');
   const nextStart = document.getElementById('nextStart');
+  const current = document.getElementById('current');
   const date = document.getElementById('date');
   const permalink = document.getElementById('permalink');
   const fps = document.getElementById('fps');
@@ -463,6 +490,8 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   }
   
   const renderBoard = function(cboard) {
+    // Update global state
+    curboard = cboard;
     board.innerText = cboard.board;
     var tweet_date = new Date(cboard.timestamp)
     var date_link = document.createElement('a');
@@ -537,9 +566,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
       setBoard(rev[0]);
     }
     */
-    curboard = boards.getCheckpoint(curboard.timestamp, dir);
-    
-    renderBoard(curboard);
+    boards.getCheckpoint(curboard.timestamp, dir).then(renderBoard);
   }
   
   const stepBoard = function(dir, first_load) {
@@ -553,8 +580,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
       curboard = curboard.mod(boards.length);
     }
     */
-    curboard = boards.getNext(curboard.timestamp, dir);
-    renderBoard(curboard);
+    boards.getNext(curboard.timestamp, dir).then(renderBoard);
   }
   
   const play_step = function() {
@@ -590,6 +616,10 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   nextStart.onclick = function(event) {
     clearInterval(play_timeout);
     stepStart(1);
+  }
+  current.onclick = function(event) {
+    clearInterval(play_timeout);
+    boards.getLatest().then(renderBoard);
   }
   
   fps.onkeyup = function(event) {
