@@ -53,55 +53,52 @@ module.exports = class BoardStore {
   
   update(params, cb) {
     var last_id = null;
-    var backfill = params.backfill;
-    delete params.backfill;
-    if(!backfill) {
-      this.db.all("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp DESC LIMIT 5", (err, recent_tweets) => {
-        if(err) { console.err("Couldn't get recent tweets: " + err); }
+    this.db.all("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp DESC LIMIT 5", (err, recent_tweets) => {
+      if(err) { console.err("Couldn't get recent tweets: " + err); }
 
-        var existing_tweets = [];
-        if(recent_tweets) {
-          var last_tweet = recent_tweets[recent_tweets.length-1];
-          var last_timestamp = new Date(last_tweet.timestamp);
-          existing_tweets = recent_tweets.map(t => t.id_str);
-          last_id = BigInt(last_tweet.id_str).subtract(1).toString();
-          console.log("Updating tweets from after " + last_tweet.id_str + " @ " + last_timestamp);
+      var existing_tweets = [];
+      if(recent_tweets) {
+        var last_tweet = recent_tweets[recent_tweets.length-1];
+        var last_timestamp = new Date(last_tweet.timestamp);
+        existing_tweets = recent_tweets.map(t => t.id_str);
+        last_id = BigInt(last_tweet.id_str).subtract(1).toString();
+        console.log("Updating tweets from after " + last_tweet.id_str + " @ " + last_timestamp);
+      } else {
+        console.log("Getting all tweets");
+        return;
+      }
+
+      this.getTweets(last_id, null, existing_tweets, params, (err, num_tweets) => {
+        if(err) {
+          cb({"error": err});
         } else {
-          console.log("Getting all tweets");
-          return;
+          cb({"num_tweets": num_tweets});
         }
+      })
+    })
+  }
+  
+  backfill(params, cb) {
+    this.db.get("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp ASC LIMIT 1", (err, first_tweet) => {
+      if(err) { console.err("Couldn't get last tweet: " + err); }
 
-        this.getTweets(last_id, null, existing_tweets, params, (err, num_tweets) => {
+      if(first_tweet) {
+        var first_timestamp = new Date(first_tweet.timestamp);
+        var first_id = first_tweet.id_str;
+        console.log("Getting tweets from before " + first_tweet.id_str + " @ " + first_timestamp);
+        this.getTweets(null, first_id, params, (err, num_tweets) => {
           if(err) {
             cb({"error": err});
           } else {
-            cb({"num_tweets": num_tweets});
+            cb(num_tweets);
           }
         })
-      })
-    } else {
-      this.db.get("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp ASC LIMIT 1", (err, first_tweet) => {
-        if(err) { console.err("Couldn't get last tweet: " + err); }
-
-        if(first_tweet) {
-          var first_timestamp = new Date(first_tweet.timestamp);
-          var first_id = first_tweet.id_str;
-          console.log("Getting tweets from before " + first_tweet.id_str + " @ " + first_timestamp);
-          this.getTweets(null, first_id, params, (err, num_tweets) => {
-            if(err) {
-              cb({"error": err});
-            } else {
-              cb(num_tweets);
-            }
-          })
-        } else {
-          console.log("Bad tweet?")
-          console.log(first_tweet)
-        }
-      })
-
-    }
-  }
+      } else {
+        console.log("Bad tweet?")
+        console.log(first_tweet)
+      }
+    })
+  }  
   
   getTweets(from_id, to_id, existing_tweets, params, cb, self, tweet_counts, depth) {
     if(!depth) { depth = 0; }

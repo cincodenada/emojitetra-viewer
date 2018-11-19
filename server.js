@@ -91,7 +91,6 @@ app.get("/update", function (request, response) {
   boards.update({
     screen_name: 'emojitetra',
     count: 200,
-    backfill: request.query.backfill,
   }, (resp) => {
     response.json(resp);
   })
