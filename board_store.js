@@ -1,5 +1,8 @@
-var BigInt = require("big-integer");
-var Promise = require("bluebird");
+const BigInt = require("big-integer");
+const Promise = require("bluebird");
+const Log = require("log");
+
+const log = new Log("info");
 
 function parse_score(board) {  
   const board_re = [
@@ -53,6 +56,7 @@ module.exports = class BoardStore {
   
   update(params, cb) {
     var last_id = null;
+    // Pull recent tweets, up to 5 back in history, to update poll results
     this.db.all("SELECT CAST(id AS TEXT) as id_str, timestamp FROM boards ORDER BY timestamp DESC LIMIT 5", (err, recent_tweets) => {
       if(err) { console.err("Couldn't get recent tweets: " + err); }
 
@@ -61,18 +65,19 @@ module.exports = class BoardStore {
         var last_tweet = recent_tweets[recent_tweets.length-1];
         var last_timestamp = new Date(last_tweet.timestamp);
         existing_tweets = recent_tweets.map(t => t.id_str);
+        // Subtract 1 so we include the last tweet as well
         last_id = BigInt(last_tweet.id_str).subtract(1).toString();
-        console.log("Updating tweets from after " + last_tweet.id_str + " @ " + last_timestamp);
+        log.info("Updating tweets starting from " + last_tweet.id_str + " @ " + last_timestamp);
       } else {
-        console.log("Getting all tweets");
+        log.info("No recent tweets found!");
         return;
       }
 
-      this.getTweets(last_id, null, existing_tweets, params, (err, num_tweets) => {
+      this.getTweets(last_id, null, existing_tweets, params, (err, info) => {
         if(err) {
           cb({"error": err});
         } else {
-          cb({"num_tweets": num_tweets});
+          cb(info);
         }
       })
     })
@@ -85,17 +90,17 @@ module.exports = class BoardStore {
       if(first_tweet) {
         var first_timestamp = new Date(first_tweet.timestamp);
         var first_id = first_tweet.id_str;
-        console.log("Getting tweets from before " + first_tweet.id_str + " @ " + first_timestamp);
-        this.getTweets(null, first_id, params, (err, num_tweets) => {
+        log.debug("Getting tweets from before " + first_tweet.id_str + " @ " + first_timestamp);
+        this.getTweets(null, first_id, params, (err, info) => {
           if(err) {
             cb({"error": err});
           } else {
-            cb(num_tweets);
+            cb(info);
           }
         })
       } else {
-        console.log("Bad tweet?")
-        console.log(first_tweet)
+        log.debug("Bad tweet?")
+        log.debug(first_tweet)
       }
     })
   }  
@@ -106,10 +111,10 @@ module.exports = class BoardStore {
     if(!tweet_counts) { tweet_counts = {"total": 0, "new": 0}; }
     
     // For if things start getting out of hand
-    //console.log("Depth: " + depth);
-    //if(depth > 3) { console.log("Bailing!"); return; }
+    //log.debug("Depth: " + depth);
+    //if(depth > 3) { log.debug("Bailing!"); return; }
     
-    console.log("Getting tweets from " + from_id + " to "  + to_id + "...");
+    log.debug("Getting tweets from " + from_id + " to "  + to_id + "...");
     if(to_id) {
       to_id = BigInt(to_id);
       params['max_id'] = to_id.toString(); 
@@ -118,50 +123,54 @@ module.exports = class BoardStore {
       from_id = BigInt(from_id);
       params['since_id'] = from_id.toString();
     }
-    console.log(JSON.stringify(params))
+    log.debug(JSON.stringify(params))
     self.twitter.get('statuses/user_timeline', params, function(error, tweets, twitter_response) {
       if (!error && twitter_response.statusCode == 200) {
         var num_tweets = 0;
         var updated = 0;
-        var last_tweet_id = null;
+        log.info(existing_tweets);
         for(var tweet of tweets) {
-          var cur_id = BigInt(tweet.id_str)
+          var last_id = BigInt(tweet.id_str)
           var tweet_timestamp = new Date(tweet.created_at);
-          console.log("Current tweet: " + tweet.id_str + " @ " + tweet_timestamp);
+          log.debug("Current tweet: " + tweet.id_str + " @ " + tweet_timestamp);
           
-          var exists = existing_tweets &&
+          let exists = existing_tweets &&
             (existing_tweets.indexOf(tweet.id_str) > -1);
-          
-          // If we hit our last tweet, dump out
-          if(from_id && cur_id <= from_id) {
-            console.log("Got all new tweets!");
-            tweet_counts.total += num_tweets;
-            tweet_counts.new += (num_tweets - updated);
-            cb(null, tweet_counts);
-            return;
-          }
+
           self.getDetails(tweet.id_str).then((fulltweet) => {
             self.storeTweet(fulltweet, exists);
           })
+          
           num_tweets++;
           if(exists) { updated++; }
-          last_tweet_id = tweet.id_str;
         }
-        console.log(last_tweet_id);
-        console.log(from_id.toString());
-
+        
         tweet_counts.total += num_tweets;
-        tweet_counts.new += (num_tweets - updated);
+        tweet_counts.updated += updated;
+        tweet_counts.new = tweet_counts.total - tweet_counts.updated;
+        
+        // If this is the last page, return out
+        if(from_id && last_id <= from_id) {
+          log.debug("Got all new tweets!");
+          cb(null, {"counts": tweet_counts});
+          return;
+        }
+        
+        log.debug("Continuing from " + from_id.toString() + " to " + last_id.toString());
+
         // Don't unconditionally go backwards yet
         if(num_tweets && from_id) {
+          // Don't go backwards forever, return after we get 50
+          // And send continue information
           if(tweet_counts.total > 50) {
-            cb(null, {"continue": [from_id.toString(), last_tweet_id]})
+            cb(null, {"counts": tweet_counts, "continue": [from_id.toString(), last_id.toString()]})
           } else {
             // Down the rabbit hole, time to get more...
-            self.getTweets(from_id.toString(), last_tweet_id, existing_tweets, params, cb, self, tweet_counts, depth+1);
+            self.getTweets(from_id.toString(), last_id.toString(), existing_tweets, params, cb, self, tweet_counts, depth+1);
           }
         } else {
-          cb(null, tweet_counts)
+          // We didn't find any tweets
+          cb(null, {"counts": tweet_counts})
         }
       } else {
         if(error) {
@@ -182,12 +191,54 @@ module.exports = class BoardStore {
   }
   
   storeTweet(tweet, exists) {
-    console.log("Storing tweet " + tweet.id_str)
     var tweet_timestamp = new Date(tweet.created_at);
-    var poll_data = {}
-    if(tweet.card) {
-      for(var key of Object.keys(tweet.card.binding_values)) {
-        var val = tweet.card.binding_values[key];
+    var tweet_json = JSON.stringify(tweet);
+    
+    var poll_data = this.parsePoll(tweet.card);
+    var poll_updated = new Date(poll_data.last_updated_datetime_utc);
+    var poll_json = JSON.stringify(poll_data);
+    
+    let self = this;
+    if(exists) {
+      log.debug("Updating tweet " + tweet.id_str)
+      // Check if we have new data, and if so update the tweet and add it to the poll_data table
+      return self.db.getAsync("SELECT MAX(timestamp) AS recent FROM sampled_data WHERE tweet_id = ?",tweet.id_str)
+        .then(row => {
+          log.debug("Comparing " + row.recent + " to " + poll_updated.getTime()/1000)
+          if(row.recent < poll_updated.getTime()/1000) {
+            log.debug("Updating tweet " + tweet.id_str);
+            return Promise.all([
+              self.db.runAsync("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str),
+              self.db.runAsync("UPDATE board_meta SET retweets = ?, likes = ? WHERE board_id = ?",tweet.retweet_count,tweet.favorite_count,tweet.id_str),
+              self.db.runAsync("INSERT INTO sampled_data VALUES(?,?,?,?,?)",tweet.id_str,poll_updated.getTime()/1000,poll_json,tweet.retweet_count,tweet.favorite_count)
+            ])
+          } else {
+            return self.db.getAsync("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str)
+              .then(data => {
+                if(data.cnt == 0) {
+                  log.warning('Re-adding "existing" board for ' + tweet.id_str);
+                  // I don't know how we get here, hopefully it's transient
+                  return self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime()/1000,tweet_json,poll_json)
+                }
+              })
+              .then(result => { log.debug("No updates needed") })
+          }
+        })
+    } else {
+      log.notice("Saving new tweet " + tweet.id_str);
+      return Promise.all([
+        self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime()/1000,tweet_json,poll_json)
+          .then(() => this.updateMeta(tweet.id_str)),
+        self.db.runAsync("INSERT INTO sampled_data VALUES(?,?,?,?,?)",tweet.id_str,poll_updated.getTime()/1000,poll_json,tweet.retweet_count,tweet.favorite_count)
+      ])
+    }
+  }
+  
+  parsePoll(card) {
+    let poll_data = {}
+    if(card) {
+      for(var key of Object.keys(card.binding_values)) {
+        var val = card.binding_values[key];
         switch(val.type) {
           case 'STRING':
             poll_data[key] = val.string_value;
@@ -198,44 +249,7 @@ module.exports = class BoardStore {
         }
       }
     }
-    var poll_updated = new Date(poll_data.last_updated_datetime_utc);
-    var poll_json = JSON.stringify(poll_data);
-    var tweet_json = JSON.stringify(tweet);
-    
-    let self = this;
-    if(exists) {
-      // Scope nonsense
-      console.log("Checking for recency...");
-      // Check if we have new data, and if so update the tweet and add it to the poll_data table
-      return self.db.getAsync("SELECT MAX(timestamp) AS recent FROM poll_data WHERE tweet_id = ?",tweet.id_str)
-        .then(timestamp => {
-          console.log(timestamp.recent)
-          console.log(poll_updated.getTime())
-          if(timestamp.recent < poll_updated.getTime()) {
-            console.log("Updating tweet " + tweet.id_str);
-            return Promise.all([
-              self.db.runAsync("UPDATE boards SET poll_data = ? WHERE id = ?",poll_json,tweet.id_str),
-              self.db.runAsync("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
-            ])
-          } else {
-            return self.db.getAsync("SELECT COUNT(*) as cnt FROM boards WHERE id = ?",tweet.id_str)
-              .then(data => {
-                if(data.cnt == 0) {
-                  // I don't know how we get here, hopefully it's transient
-                  return self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json)
-                }
-              })
-              .then(result => { console.log("Inserted board") })
-          }
-        })
-    } else {
-      console.log("Saving tweet " + tweet.id_str);
-      return Promise.all([
-        self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime(),tweet_json,poll_json)
-          .then(() => { this.updateMeta(tweet.id_str) }),
-        self.db.runAsync("INSERT INTO poll_data VALUES(?,?,?)",tweet.id_str,poll_updated.getTime(),poll_json)
-      ])
-    }
+    return poll_data;
   }
   
   findOtherTweets() {
@@ -263,10 +277,10 @@ module.exports = class BoardStore {
                  'LEFT JOIN boards b2 ON b2.id = prev_id ' +
                  'WHERE b2.id IS NULL AND prev_id != "" LIMIT 10', function(err, row) {
       if(!err) {
-        console.log(row);
+        log.debug(row);
         self.getDetails(row.prev_id).then((fulltweet) => {
           self.storeTweet(fulltweet, false);
-          console.log("Recovering " + row.prev_id);
+          log.debug("Recovering " + row.prev_id);
         })
       }
     }, function() {
@@ -280,7 +294,7 @@ module.exports = class BoardStore {
     if(!depth) { depth = 0; }
     if(depth == max_tweets) { return {total: depth, next: tweet_id} }
     return self.getDetails(tweet_id).then((fulltweet) => {
-      console.log("Recovering " + tweet_id);
+      log.debug("Recovering " + tweet_id);
       self.storeTweet(fulltweet, false);
       if(fulltweet.in_reply_to_status_id_str) {
           return self.getThread(fulltweet.in_reply_to_status_id_str, max_tweets, depth + 1);
@@ -309,11 +323,11 @@ module.exports = class BoardStore {
       'FROM boards b '+
       'WHERE b.id = ?';
     
-    console.log("Updating meta for tweet " + tweet_id);
-    console.log('REPLACE INTO board_meta ' + query);
+    log.info("Updating meta for tweet " + tweet_id);
+    log.debug('REPLACE INTO board_meta ' + query);
     return self.db.runAsync('REPLACE INTO board_meta ' + query, tweet_id)
       .then(res => {
-        console.log("Updated board meta for tweet " + tweet_id + ", doing calculations...");
+        log.info("Updated board meta for tweet " + tweet_id + ", doing calculations...");
         return self.calculateMeta(tweet_id);
       })
   }
@@ -336,18 +350,18 @@ module.exports = class BoardStore {
       query += "WHERE bm.role IS NULL LIMIT " + parseInt(limit)
       params = []
     }
-    console.log("Calculating meta for " + (tweet_id || ("limit " + limit)))
-    console.log(query);
+    log.info("Calculating meta for " + (tweet_id || ("limit " + limit)))
+    log.debug(query);
   
     return self.db.allAsync(query, params).then(boards => {
       let promises = boards.map(board => {
         let role = "";
         if(board.is_end) { role = "end"; }
         if(board.is_start) { role = "start"; }
-        if(board.is_end && board.is_start) { console.log("End and start!!"); }
+        if(board.is_end && board.is_start) { log.debug("End and start!!"); }
         let params = [parse_score(board.board), role, board.id_str]
-        console.log(board);
-        console.log(params);
+        log.debug(board);
+        log.debug(params);
         return new Promise((resolve, reject) => {
           self.db.run(
             'UPDATE board_meta SET score = ?, role = ? WHERE board_id = ?',
@@ -372,7 +386,7 @@ module.exports = class BoardStore {
     var order = order || -1;
     var sort_field = opts.sort_field || "timestamp"
     
-        console.log(opts)
+        log.debug(opts)
     var where = [], params = {};
     let join = ''
     let fields = ['CAST(id AS TEXT) as id_str', 'board', 'timestamp', 'poll_data', 'role']
@@ -419,7 +433,7 @@ module.exports = class BoardStore {
     } else {
       qs.push(this.makeQuery(opts));
     }
-    console.log(qs);
+    log.debug(qs);
     
     let boards = [];
     let promises = [];
@@ -427,8 +441,8 @@ module.exports = class BoardStore {
     for(let q of qs) {
       let curp = new Promise((resolve, reject) => {
         self.db.all(q.query, q.params, function(err, rows) {
-          if(err) { console.log(err); reject(err) }
-          //console.log(rows);
+          if(err) { log.debug(err); reject(err) }
+          //log.debug(rows);
           //let min_id = (order < 0) ? rows[rows.length-1].id : rows[0].id;
           //let max_id = (order < 0) ? rows[0].id : rows[rows.length-1].id;
           for(var r of rows) {
@@ -443,44 +457,5 @@ module.exports = class BoardStore {
     Promise.all(promises)
       .then(function(vals) { cb({ boards: boards }) })
       .catch(function(err) { cb({ error: err }) })
-  }
-  
-  getRaw(cb) {
-    var self = this;
-    this.db.all("SELECT json FROM boards ORDER BY id DESC", function(err, rows) {
-      if(err) { console.log(err) }
-      var output = "";
-      var expected_next = "";
-      for(var r of rows) {
-        var parsed = JSON.parse(r.json)
-        if(!parsed || !parsed.text) {
-          console.log("Couldn't parse " + r.id + ": " + r.json)
-          output += "Error at " + r.id + ": " + r.json + "<br/>\n";
-          continue;
-        }
-        if(parsed.text.indexOf("◽") > -1) {
-          if(expected_next) {
-            if(parsed.id_str != expected_next) {
-              // Here we skipped a thing, go fetch it
-              /*
-              self.getDetails(expected_next, (fulltweet) => {
-                self.storeTweet(fulltweet, false);
-              })
-              */
-              output += "❓"
-            } else {
-              output += "✔️"
-            }
-          }
-          output += '<a href="/' + parsed.id_str + '">Board ' + parsed.created_at + '</a><br/>\n';
-          expected_next = parsed.in_reply_to_status_id_str;
-        } else if(parsed.text.indexOf("new thread") > -1) {
-          output += '<a href="/' + parsed.id_str + '">Continuation ' + parsed.created_at + '</a><br/>\n';
-        } else {
-          output += '<a href="/' + parsed.id_str + '">Other: ' + parsed.text + ' @ ' + parsed.created_at + '</a><br/>\n';          
-        }
-      }
-      cb(output)
-    })
   }
 }

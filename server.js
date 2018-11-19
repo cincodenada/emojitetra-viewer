@@ -96,8 +96,7 @@ app.get("/update", function (request, response) {
   })
 });
 
-app.get("/:id?", function (request, response) {
-  console.log(request.params.id)
+app.get("/:id(\\d+)?", function (request, response) {
   response.render(__dirname + '/views/index.html', {
     tweet_id: request.params.id,
     play_speed: request.query.play_speed,
@@ -177,8 +176,43 @@ app.get("/invalidate", function(request, response) {
 //=================================================
 
 app.get("/check", function(request, response) {
-  boards.getRaw(function(boards) {
-    response.send(boards)
+  let query = "SELECT CAST(id AS TEXT) id_str, board, CAST(prev_id AS STRING) prev_id, CAST(prev_board_id AS STRING) prev_board_id, role, timestamp FROM boards b LEFT JOIN board_meta bm ON bm.board_id=b.id ORDER BY id DESC";
+  if(request.query.limit) { query += " LIMIT " + parseInt(request.query.limit) }
+  db.allAsync(query).then((boards) => {
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+    });
+    let expected_prev, expected_prev_board, expected_prev_cont;
+    console.log(boards[0])
+    for(let b of boards) {
+      let tweet_time = new Date(b.timestamp*1000);
+      if(b.board.indexOf("◽") > -1) {
+        let prefix_char = "┣";
+        let check_char = "🔹";
+        let applicable_prev = expected_prev || expected_prev_cont;
+        if(applicable_prev) {
+          check_char = (b.id_str == applicable_prev) ? "✔️" : "❓️";
+        }
+        let check_board_char = "🔹";
+        if(expected_prev_board) {
+          check_board_char = (b.id_str == expected_prev_board) ? "✔️" : "❓️";   
+        }
+        response.write(check_char + check_board_char + prefix_char + '<a href="/' + b.id_str + '">Board ' + tweet_time + '</a><br/>\n');
+        expected_prev = b.prev_id;
+        expected_prev_board = b.prev_board_id;
+        expected_prev_cont = null;
+      } else if(b.board.indexOf("Game continues") == 0) {
+        response.write('❇️➿️╞<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">Continues-&gt; ' + tweet_time + '</a><br/>\n');
+        expected_prev_cont = b.prev_id;
+      } else if(b.board.indexOf("Continuing game") == 0) {
+        let status = (expected_prev && b.id_str == expected_prev) ? "✔️" : "❓️";
+        response.write(status + '➿️╞<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">-&gt;Continuing ' + tweet_time + '</a><br/>\n');
+        expected_prev = null;
+      } else {
+        response.write('⭕⭕<a href="/' + b.id_str + '">Other: ' + b.board + ' @ ' + tweet_time + '</a><br/>\n');
+      }
+    }
+    response.end();
   });
 })
 
@@ -225,8 +259,10 @@ app.get("/fetch_thread/:id", function(request, response) {
 
 app.get("/details/:id", function (request, response) {
   // Card example: https://gist.github.com/fourtonfish/816c5272c3480c7d0e102b393f60bd49
-  var res = boards.getDetails(request.params.id, (tweet) => {
+  var res = boards.getDetails(request.params.id).then((tweet) => {
     response.json(tweet);
+  }).catch((err) => {
+    response.json(err);
   })
 });
 

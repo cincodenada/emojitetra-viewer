@@ -20,8 +20,8 @@ function bin_search(a, value, closest_dir, wrap) {
   }
   
   // Edge cases (heh)
-  if(lo == a.length && closest_dir != -1) { return wrap ? 0 : null; }
-  if(hi == -1 && closest_dir != 1) { return wrap ? a.length-1 : null; }  
+  if(lo == a.length && closest_dir == 1) { return wrap ? 0 : null; }
+  if(hi == -1 && closest_dir == -1) { return wrap ? a.length-1 : null; }  
   
   if(closest_dir) {
     if(Math.sign(a[mid] - value) == closest_dir) {
@@ -206,6 +206,7 @@ function BoardBin() {
   this.ensureMargin = function(idx, direction, margin) {
     let gap_map = (direction < 0) ? gaps_rev : gaps_fwd;
     let looped = false;
+      
     if(idx !== null) {
       let cur_idx = idx;
       for(let d=0; d < margin; d++) {
@@ -213,9 +214,7 @@ function BoardBin() {
           let target = board_ts[cur_idx];
           if(direction == 0) { target = boards[target].id }
           let promise = this.getBoards(target, direction);
-          // If we need this board, wait on it
-          if(d == 0) { return promise; }
-          else { return Promise.resolve(true); }
+          return true;
         } else if(!looped && cur_idx < 0) {
           // Loop, and decrement d so we try this board again
           cur_idx = board_ts.length;
@@ -230,12 +229,12 @@ function BoardBin() {
         cur_idx += direction;
         // If we loop again, we're good
         if(looped && (cur_idx >= board_ts.length || cur_idx < 0)) { 
-          return Promise.resolve(true);
+          return true
         }
       }
     }
     // TODO: else (shouldn't happen?)
-    return Promise.resolve(false);
+    return false
   }
   
   // target is a timestamp for before/after, tweet ID for around
@@ -309,21 +308,37 @@ function BoardBin() {
   }
   
   this.getNext = function(from_ts, direction) {
-    return this.loadBoard(bin_search(board_ts, from_ts + direction, direction, true), direction);
+    let gap_map = (direction < 0) ? gaps_rev : gaps_fwd;
+    if(gap_map[from_ts]) {
+      return this.getBoards(from_ts, direction).then(() => {
+        let next_idx = bin_search(board_ts, from_ts + direction, direction, true)
+        return boards[board_ts[next_idx]];
+      })
+    } else {
+      let next_idx = bin_search(board_ts, from_ts + direction, direction, true)
+      return this.loadBoard(next_idx, direction);
+    }
   }
   
+  // We pre-load all checkpoints, so we're guaranteed to have it
   this.getCheckpoint = function(from_ts, direction) {
-    // We nudge by direction so we don't stay on the same one
+    // Find the next checkpoint
     let checkpoint_idx = bin_search(checkpoints, from_ts + direction, direction, true)
-    return this.getNext(checkpoints[checkpoint_idx], 0)
+    return Promise.resolve(boards[checkpoints[checkpoint_idx]])
+    
+    /*
+    // Don't pre-load around checkpoints, we'll load when they try to go somewhere
+    let idx = bin_search(board_ts, checkpoints[checkpoint_idx]);
+    return this.loadBoard(idx, direction);
+    */
   }
   
-  this.loadBoard = function(idx, direction) {
+  this.loadBoard = function(idx, direction, margin) {
     // Return a promise, which is just for timing: wait until we're sure
     // that we can load this board
-    return this.ensureMargin(idx, direction, chunk_size).then(() => {
-      return boards[board_ts[idx]];
-    })
+    let board = boards[board_ts[idx]];
+    this.ensureMargin(idx, direction, chunk_size)    
+    return Promise.resolve(board);
   }
   
   this.getScores = function() {
@@ -493,7 +508,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
     // Update global state
     curboard = cboard;
     board.innerText = cboard.board;
-    var tweet_date = new Date(cboard.timestamp)
+    var tweet_date = new Date(cboard.timestamp*1000)
     var date_link = document.createElement('a');
     date_link.innerText = tweet_date;
     date_link.target = "_blank";
@@ -503,7 +518,9 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
     permalink.href = "/" + cboard.id;
     
     
-    if(cboard.poll_finished) {
+    if(cboard.role == "end") {
+      votes.innerHTML = "(End of game)";
+    } else if(cboard.poll_finished) {
       votes.innerHTML = "";
       setPoll(cboard.poll_data);
     } else {

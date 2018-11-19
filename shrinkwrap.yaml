@@ -3,6 +3,7 @@ dependencies:
   bluebird: 3.5.3
   compression: 1.7.2
   express: 4.16.3
+  log: 1.4.0
   nunjucks: 3.1.3
   sqlite3: 4.0.1
   twitter: 1.7.1
@@ -1207,6 +1208,12 @@ packages:
     optional: true
     resolution:
       integrity: sha1-gteb/zCmfEAF/9XiUVMArZyk168=
+  /log/1.4.0:
+    dev: false
+    engines:
+      node: '>= 0.2.0'
+    resolution:
+      integrity: sha1-S6HYkP3iSbAx3KA7w36q8yVlbxw=
   /map-cache/0.2.2:
     dev: false
     engines:
@@ -2216,6 +2223,7 @@ specifiers:
   bluebird: ^3.5.3
   compression: ^1.7.2
   express: ^4.16.3
+  log: ^1.4.0
   nunjucks: ^3.1.3
   sqlite3: ^4.0.1
   twitter: ^1.7.1
