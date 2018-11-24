@@ -317,7 +317,7 @@
       d.winner = winner;
       d.ratio = (total-d.votes[winner])/d.votes[winner];
       d.total = total;
-      d.timestamp = new Date(d.timestamp)
+      d.timestamp = new Date(d.timestamp*1000)
       minmax(dtime, d.timestamp);
       minmax(dratio, d.ratio);
     }
@@ -336,13 +336,12 @@
     let tooltip = d3.select('body').append('div')
       .attr('class','tooltip')
     
-    dtime = dtime.map(sec => new Date(sec*1000))
     let x = d3.scaleTime()
       .domain(dtime)
       .range([0, width-margin*2])
     
     let y = d3.scaleLinear()
-      .domain(dratio)
+      .domain([0,dratio[1]])
       .range([height-margin*2, 0])
     
     let xAxis = d3.axisBottom(x)
@@ -359,15 +358,32 @@
       .data(indata)
       .enter().append("rect")
         .attr("width", barwidth)
-        .attr("height", d => y(d.ratio))
-        .attr("transform", d => `translate(${x(d.timestamp*1000)-barwidth/2},${y(dratio[1] - d.ratio)})`)
-        .on("mouseover", function(d) {
+        .attr("height", d => Math.abs(y(d.ratio) - y(0)))
+        .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},${y(d.ratio)})`)
+
+    let bisectDate = d3.bisector(el => el.timestamp).left;
+    let cur_idx;
+    chart
+        .on("mouseover", function() {
           tooltip
             .style('display', '')
-            .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
-          setPoll(d.votes, document.getElementById('votelist'))
         })
         .on("mousemove", function() {
+          let mouse = d3.mouse(this)
+          let val = x.invert(mouse[0])
+          let idx = bisectDate(indata, val);
+          if(indata[idx-1] && (
+                Math.abs(val - indata[idx].timestamp) > Math.abs(val - indata[idx-1].timestamp)
+          )) {
+            idx -= 1;
+          }
+          if(idx != cur_idx) {
+            let d = indata[idx];
+            cur_idx = idx;
+            tooltip
+              .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
+              setPoll(d.votes, document.getElementById('votelist'))
+          }
           let p = getPosition(this, x, y);
           tooltip
             .style('left', p[0] + "px")
@@ -390,7 +406,6 @@
 function getPosition(ctx, x, y) {
   let mouse = d3.mouse(ctx)
   let rel = ctx.getBoundingClientRect();
-  console.log(mouse)
   return [
     rel.x + window.pageXOffset + mouse[0],
     rel.y + window.pageYOffset + mouse[1]
