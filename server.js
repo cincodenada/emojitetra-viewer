@@ -103,6 +103,49 @@ app.get("/:id(\\d+)?", function (request, response) {
   });
 });
 
+app.get("/scores", function (request, response) {
+  db.allAsync("SELECT timestamp, score FROM boards b LEFT JOIN board_meta bm ON b.id=bm.board_id WHERE is_board")
+    .then(scores => response.json(scores.map(s => [s.timestamp, s.score])))
+    .catch(err => response.json(err))
+})
+
+app.get("/votes", function(request, response) {
+  db.allAsync("SELECT CAST(id AS TEXT) id, timestamp, poll_data FROM boards WHERE is_board LIMIT 10")
+    .then(polls => {
+      let results = [];
+      for(let p of polls) {
+        let poll_json = JSON.parse(p.poll_data);
+        let bits = {
+          'label': [],
+          'count': [],
+        };
+        console.log(poll_json)
+        for(let k in poll_json) {
+          let match = k.match(/choice(\d+)_(\w+)/)
+          if(match) {
+            bits[match[2]][parseInt(match[1])] = poll_json[k]
+          }
+        }
+        let votes = {}
+        for(let idx in bits.label) {
+          votes[bits.label[idx]] = bits.count[idx]         
+        }
+        console.log(votes)
+        results.push({
+          id: p.id,
+          timestamp: p.timestamp,
+          votes: votes
+        })
+        console.log(results)
+      }
+      response.json(results);
+    })
+    .catch(err => response.json(err))
+})
+
+app.get("/stats", function (request, response) {
+  response.render(__dirname + '/views/stats.html');
+})
 //========================
 // Twitter auth endpoints
 //========================
@@ -237,7 +280,7 @@ app.get("/fetch/:id", function(request, response) {
   let promises = [];
   for(let id of ids) {
     promises.push(boards.getDetails(id).then(fulltweet => {
-      return boards.storeTweet(fulltweet, false);
+      return boards.storeTweet(fulltweet, request.query.exists);
     }))
   }
   Promise.all(promises.map(p => {
@@ -287,7 +330,7 @@ app.get("/fill_meta/:count", (request, response) => {
       'json_extract(json, "$.in_reply_to_status_id_str"),' +
       'json_extract(json, "$.quoted_status_id_str")' +
     ') prev_id,' +
-    '(SELECT id FROM boards WHERE timestamp < b.timestamp AND board LIKE "%◽%" ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
+    '(SELECT id FROM boards WHERE timestamp < b.timestamp AND is_board ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
     'NULL score,' +
     'NULL role,' +
     'NULL replies,' +

@@ -103,7 +103,7 @@ module.exports = class BoardStore {
         log.debug(first_tweet)
       }
     })
-  }  
+  }
   
   getTweets(from_id, to_id, existing_tweets, params, cb, self, tweet_counts, depth) {
     if(!depth) { depth = 0; }
@@ -227,7 +227,7 @@ module.exports = class BoardStore {
     } else {
       log.notice("Saving new tweet " + tweet.id_str);
       return Promise.all([
-        self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime()/1000,tweet_json,poll_json)
+        self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime()/1000,tweet_json,poll_json,(tweet.text.indexOf("◽") > -1))
           .then(() => this.updateMeta(tweet.id_str)),
         self.db.runAsync("INSERT INTO sampled_data VALUES(?,?,?,?,?)",tweet.id_str,poll_updated.getTime()/1000,poll_json,tweet.retweet_count,tweet.favorite_count)
       ])
@@ -314,7 +314,7 @@ module.exports = class BoardStore {
         'json_extract(json, "$.in_reply_to_status_id_str"),' +
         'json_extract(json, "$.quoted_status_id_str")' +
       ') prev_id,' +
-      '(SELECT id FROM boards WHERE timestamp < b.timestamp AND board LIKE "%◽%" ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
+      '(SELECT id FROM boards WHERE timestamp < b.timestamp AND is_board ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
       'NULL score,' +
       'NULL role,' +
       'NULL replies,' +

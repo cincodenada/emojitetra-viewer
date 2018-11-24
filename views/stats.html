@@ -10,8 +10,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>Welcome to Glitch!</title>
-    <meta name="description" content="A cool thing made with Glitch">
+    <title>EmojiTetra Stats</title>
+    <meta name="description" content="Some neat stats made with Glitch">
     <link id="favicon" rel="icon" href="https://glitch.com/edit/favicon-app.ico" type="image/x-icon">
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -23,57 +23,28 @@
 
     <!-- import the webpage's stylesheet -->
     <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/stats.css">
 
     <!-- Emoji -->
     <link rel="stylesheet" href="/emoji.css" />
-    
-    <script type="text/javascript">
-      // Template variables
-      var cur_tweet = '{{ tweet_id }}';
-      var play_speed = {{ play_speed | d('null') }};
-    </script>
   </head>
   <body>
     <!-- Pre-load emoji sheet -->
     <img id="emoji_sheet" src="https://cdn.glitch.com/ca559128-0a9d-41fe-94fe-ea43fec31feb%2Fsheet_twitter_32.png" style="display:none"/>
     <header>
       <h1>
-        Emoji Tetra Replay
+        Emoji Tetra Stats
       </h1>
     </header>
 
     <main>
       <p class="bold">Oh hi,</p>
-      <p>Here's what's been happening on <a href="https://twitter.com/emojitetra">@emojitetra</a>:</p>
-      <section class="board">
-        <button id="current">Latest Tweet</button><br/>
-        <button id="prevStart">&lt;&lt;</button>
-        <button id="prev">&lt;</button>
-        <button id="play">Play</button>
-        <button id="next">&gt;</button>
-        <button id="nextStart">&gt;&gt;</button>
-        <br/>
-        <span id="date"></span>
-        <hr/>
-        <div id="current">
-          <div id="board">Loading tweets...</div>
-          <div id="right_panel">
-            <h3>Next move:</h3>
-            <div id="votes"></div>
-            <h3>High Scores:</h3>
-            <div id="high_scores"></div>
-          </div>  
-          <div class="clearfix"></div>
-        </div>
+      <p>Here's a summary of what's been happening on <a href="https://twitter.com/emojitetra">@emojitetra</a>:</p>
+      <section class="scores">
+        <div id="scores"></div>
       </section>
-      <form class="options">
-        <label><input id="replace_emoji" type="checkbox" value="yep" checked="checked">Replace Emoji with Images</label> <span id="loading_emoji" style="display:none">(Loading...)</span></span><br/>
-        <span>Replay Frames Per Second: <input autocomplete="off" id="fps" type="number" value="1"></span>
-      </form>
-      <section>
-      I've recently done a lot of reworking on the backend to load smaller bits and make everything much faster. Everything should be put back together, but if you notice anything strange,
-      tweet or DM me at <a href="https://twitter.com/cincodenada">@cincodenada</a>.<br/>
-      Also, a small improvement that actually inspried the whole rework: you're looking at the current state of the game (as of a minute ago max), not a move or two behind. Yay! 😄
+      <section class="votes">
+        <div id="votes"></div>
       </section>
     </main>
 
@@ -83,9 +54,13 @@
       Submit bug reports and/or ideas on the <a href="https://gitlab.com/cincodenada/emojitetra-viewer/issues">GitLab Issue Tracker</a><br/>
     </footer>
     
+    <!-- d3 -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://d3js.org/d3-time.v1.min.js"></script>
+    <script src="https://d3js.org/d3-time-format.v2.min.js"></script>
     <!-- import the webpage's client-side javascript file -->
     <script src="/tetra.js"></script>
-    <script src="/client.js"></script>
+    <script src="/stats.js"></script>
 
     <!-- include the Glitch button to show what the webpage is about and
           to make it easier for folks to view source and remix -->
