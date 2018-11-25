@@ -110,7 +110,7 @@ app.get("/scores", function (request, response) {
 })
 
 app.get("/votes", function(request, response) {
-  db.allAsync("SELECT CAST(id AS TEXT) id, timestamp, poll_data FROM boards WHERE is_board LIMIT 10")
+  db.allAsync("SELECT CAST(id AS TEXT) id, timestamp, poll_data FROM boards WHERE is_board ORDER BY id DESC LIMIT 50")
     .then(polls => {
       let results = [];
       for(let p of polls) {

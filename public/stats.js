@@ -1,5 +1,5 @@
 (function() {
-  let width = 2000;
+  let width = 1000;
   let height = 1000;
   let margin = 50;
 
@@ -53,7 +53,7 @@
     let num_series = data.length;
 
     let score = 0, time = 0;
-    let points_per_hour = 1100;
+    let points_per_hour = 1200;
     let dotted_end = 1e5;
 
     for(let s=0; s < num_series; s++) {
@@ -354,53 +354,48 @@
 
     // bar width, in ms
     let barwidth = x((20*60*1000)*0.9)-x(0);
-    chart.append("g").selectAll("rect")
+    chart.append("g")
+      .attr("class", "bars")
+      .selectAll("rect")
       .data(indata)
-      .enter().append("rect")
-        .attr("width", barwidth)
-        .attr("height", d => Math.abs(y(d.ratio) - y(0)))
-        .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},${y(d.ratio)})`)
+      .enter()
+        .append("rect")
+          .attr("width", barwidth)
+          .attr("height", d => Math.abs(y(d.ratio) - y(0)))
+          .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},${y(d.ratio)})`)
 
-    let bisectDate = d3.bisector(el => el.timestamp).left;
-    let cur_idx;
-    chart
-        .on("mouseover", function() {
-          tooltip
-            .style('display', '')
-        })
-        .on("mousemove", function() {
-          let mouse = d3.mouse(this)
-          let val = x.invert(mouse[0])
-          let idx = bisectDate(indata, val);
-          if(indata[idx-1] && (
-                Math.abs(val - indata[idx].timestamp) > Math.abs(val - indata[idx-1].timestamp)
-          )) {
-            idx -= 1;
-          }
-          if(idx != cur_idx) {
-            let d = indata[idx];
-            cur_idx = idx;
+    chart.append("g")
+      .attr("class", "shadowbars")
+      .selectAll("rect")
+      .data(indata)
+      .enter()
+        .append("rect")
+          .attr("width", barwidth)
+          .attr("height", height)
+          .attr("opacity", "0")
+          .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},0)`)
+          .on("mouseover", function(d) {
+              tooltip
+                .style('display', '')
+                .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
+                setPoll(d.votes, document.getElementById('votelist'))
+          })
+          .on("mousemove", function() {
+            let mouse = d3.mouse(this)
+            let p = getPosition(this, x, y);
             tooltip
-              .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
-              setPoll(d.votes, document.getElementById('votelist'))
-          }
-          let p = getPosition(this, x, y);
-          tooltip
-            .style('left', p[0] + "px")
-            .style('top', p[1] + "px")
-        })
-        .on("mouseout", function() {
-          return;
-          tooltip
-            .style('display', 'none')
-            .text("")
-        })
-      
-
+              .style('left', p[0] + "px")
+              .style('top', p[1] + "px")
+          })
+          .on("mouseout", function() {
+            return;
+            tooltip
+              .style('display', 'none')
+              .text("")
+          })
   }
   voteRequest.open('get', '/votes');
   voteRequest.send();
-
 })()
 
 function getPosition(ctx, x, y) {
