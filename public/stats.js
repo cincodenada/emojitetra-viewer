@@ -1,13 +1,5 @@
 (function() {
-  let width = 1000;
-  let height = 1000;
-  let margin = 50;
-
- const chart = d3.select('#scores')
-  .append('svg')
-  .attr('width', width)
-  .attr('height', height)
-
+ 
   
   let dreamRequest = new XMLHttpRequest();
   dreamRequest.onload = function(){
@@ -74,6 +66,17 @@
     }
     //data.sort((a, b) => (a.sort_idx == b.sort_idx) ? (!!b.fit - !!a.fit) : (a.sort_idx - b.sort_idx));
 
+    let width = 1000;
+    let height = 1000;
+    let margin = 50;
+
+    let container = d3.select('#scores')
+    let chart = container
+      .append('svg')
+      .attr('width', width)
+      .attr('height', height)
+
+    
     let x = d3.scaleLinear()
       .domain([0, d3.max(data, d => d3.max(d.data, d => d.time))])
       .range([margin, width - margin])
@@ -191,7 +194,7 @@
         .append("div")
         .attr("class", "tooltip")
         .attr("id", d => "tooltip-" + +d.start)
-        .style("display", "");
+        .style("display", "none");
 
     // the circle
     mousePerLine.append("circle")
@@ -211,15 +214,17 @@
       .attr('fill', 'none')
       .attr('pointer-events', 'all')
       .on('mouseout', function() { // on mouse out hide line, circles and text
-        d3.select(".mouse-line")
+        chart.select(".mouse-line")
           .style("opacity", "0");
-        d3.selectAll(".mouse-per-line")
+        chart.selectAll(".mouse-per-line")
+          .style("display", "none");
+        container.selectAll(".tooltip")
           .style("display", "none");
       })
       .on('mouseover', function() { // on mouse in show line, circles and text
-        d3.select(".mouse-line")
+        chart.select(".mouse-line")
           .style("opacity", "1");
-        d3.selectAll(".mouse-per-line")
+        chart.selectAll(".mouse-per-line")
           .style("display", "");
       })
       .on('mousemove', function() { // mouse moving over canvas
@@ -317,6 +322,7 @@
     
     let tooltip = container.append('div')
       .attr('class','tooltip')
+      .style('display', 'none')
     
     let x = d3.scaleTime()
       .domain(dtime)
