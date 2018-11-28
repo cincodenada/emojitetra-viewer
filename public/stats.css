@@ -1,3 +1,7 @@
+.scores {
+  position: relative;
+}
+
 .mouse-per-line text {
   margin-top: 10px;
   padding: 5px;
@@ -11,6 +15,16 @@
   background: rgba(128,128,128,0.9);
   padding: 5px;
   position: absolute;
+}
+
+.votes .tooltip::after {
+  content: "";
+  border: solid;
+  border-width: 0 5px 5px 5px;
+  border-color: #000 transparent;
+  position: absolute;
+  top: -6px;
+  left: 2px;
 }
 
 .bars rect {

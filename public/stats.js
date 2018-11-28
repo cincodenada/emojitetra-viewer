@@ -110,7 +110,7 @@
     }
     let color = d3.scaleOrdinal(d3.schemePaired)
       .domain(d3.map(data, d => d.start).keys())
-
+    
     // x axis
     chart.append("g")
       .attr("transform", `translate(0,${height - margin})`)
@@ -123,10 +123,6 @@
       .enter().append("g")
         .attr("transform", d => `translate(0,${y(0) - y((d.sort_idx-num_series+1)*separation)}) rotate(${90+rot_deg},${x(0)},${y(0)}) translate(${margin},0)`)
         .each(axisSlanted)
-  
-    let tooltip = chart.append("div")	
-    .attr("class", "tooltip")				
-    .style("opacity", 0);
     
     // line
     let line = d3.line()
@@ -178,7 +174,7 @@
 
     let text_margin = 5
     let circle_radius = 7
-    let textpos = [10,circle_radius*1.5]
+    let textpos = [circle_radius*.7,circle_radius*.7]
 
     // here's a g for each circle and text on the line
     var mousePerLine = mouseG.selectAll('.mouse-per-line')
@@ -186,6 +182,16 @@
       .enter()
       .append("g")
       .attr("class", "mouse-per-line");
+
+    let tooltip = d3.select('#scores')
+      .append("div")
+      .selectAll("div")
+      .data(data)
+      .enter()
+        .append("div")
+        .attr("class", "tooltip")
+        .attr("id", d => "tooltip-" + +d.start)
+        .style("display", "");
 
     // the circle
     mousePerLine.append("circle")
@@ -195,16 +201,6 @@
       })
       .style("fill", "none")
       .style("stroke-width", "1px")
-
-    // the text
-    mousePerLine.append("svg:rect")
-      .attr("transform", `translate(${textpos[0]},${textpos[1]})`)
-      .style("opacity", 0.25)
-      .style("stroke", "#000")
-      .style("stroke-width", "2px")
-    mousePerLine.append("text")
-      .attr("transform", `translate(${textpos[0]+text_margin},${textpos[1]+text_margin})`)
-      .attr("alignment-baseline", "middle")
 
     let timeFormat = d3.timeFormat("%e %b")
     
@@ -227,8 +223,8 @@
           .style("display", "");
       })
       .on('mousemove', function() { // mouse moving over canvas
-        var mouse = d3.mouse(this);
-
+        let mouse = d3.mouse(this);
+      
         // move the vertical line
         d3.select(".mouse-line")
           .attr("d", function() {
@@ -240,52 +236,37 @@
         // position the circle and text
         d3.selectAll(".mouse-per-line")
           .attr("transform", function(d, i) {
-            var xDate = x.invert(mouse[0]),
+            var xpos = mouse[0],
+                xDate = x.invert(xpos),
                 bisect = d3.bisector(function(d) { return d.time; }).left;
                 idx = bisect(d.data, xDate);
 
-            // since we are use curve fitting we can't relay on finding the points like I had done in my last answer
-            // this conducts a search using some SVG path functions
-            // to find the correct position on the line
-            // from http://bl.ocks.org/duopixel/3824661
-/*
-            var beginning = 0,
-                end = lines[i].getTotalLength(),
-                target = null;
-
-            while (true){
-              target = Math.floor((beginning + end) / 2);
-              pos = lines[i].getPointAtLength(target);
-              if ((target === end || target === beginning) && pos.x !== mouse[0]) {
-                  break;
+            let end_margin = 2; // days
+            if(!d.data[idx] || idx == 0) {
+              if(!d.data[idx]) { idx = d.data.length - 1; }
+              if(Math.abs(d.data[idx].time - xDate) > end_margin) {
+                d3.select('#tooltip-' + +d.start).style('display', 'none')
+                d3.select(this).style('display', 'none');
+                return "";
               }
-              if (pos.x > mouse[0])      end = target;
-              else if (pos.x < mouse[0]) beginning = target;
-              else break; //position found
-            }
-*/
-            if(!d.data[idx]) {
-              d3.select(this).style('display', 'none');
-              return "";
+              xpos = x(d.data[idx].time)
             }
 
             d3.select(this).style('display', '');
             let cur_val = d.data[idx];
-            let pos = {x: xDate, y: y(cur_val.score)}
-            // update the text with y value
-            let text = d3.select(this).select('text')
-            text.text(`${timeFormat((d.start+cur_val.time*60*60*24)*1000)}: ${cur_val.score} points`);
-            let textSize = text.node().getBBox();
-            d3.select(this).select('rect')
-              .attr('width', textSize.width + 10)
-              .attr('height', textSize.height + 10)
-              .attr('transform', `translate(${textpos[0]}, ${textpos[1]-textSize.height/2})`)
-
+            let pos = {x: xpos, y: y(cur_val.score)};
             let adj_y = y(0) - y((d.sort_idx-num_series+1)*separation);
 
+            d3.select('#tooltip-' + +d.start)
+              .text(`${timeFormat((d.start+cur_val.time*60*60*24)*1000)}: ${cur_val.score} points`)
+              .style('display','')
+              .style('left', (pos.x + textpos[0]) + "px")
+              .style('top', (pos.y + textpos[1] + adj_y) + "px")
+          
             // return position
-            return "translate(" + mouse[0] + "," + (pos.y + adj_y) + ")";
+            return "translate(" + xpos + "," + (pos.y + adj_y) + ")";
           });
+
       });
     
     
@@ -325,36 +306,34 @@
     console.log(dratio)
     console.log(dtime)
     
-    let width = 2000;
+    let width = 1000;
     let height = 200;
     let margin = 20;
-    let chart = d3.select('#votes')
-      .append('svg')
+    
+    let container = d3.select('#votes')
+    let chart = container.append('svg')
       .attr('width', width)
       .attr('height', height);
     
-    let tooltip = d3.select('body').append('div')
+    let tooltip = container.append('div')
       .attr('class','tooltip')
     
     let x = d3.scaleTime()
       .domain(dtime)
-      .range([0, width-margin*2])
+      .range([margin, width-margin*2])
     
     let y = d3.scaleLinear()
       .domain([0,dratio[1]])
-      .range([height-margin*2, 0])
+      .range([height-margin*2, margin])
     
     let xAxis = d3.axisBottom(x)
     
-    chart.append("g")
-      .attr("transform", `translate(0,${height-margin})`)
-      .call(xAxis)
-    
-    let voteFormat = d3.timeFormat("%e %b")
+    let voteFormat = d3.timeFormat("%e %b %H:%M")
 
     // bar width, in ms
     let barwidth = x((20*60*1000)*0.9)-x(0);
     chart.append("g")
+      .attr("transform", `translate(0,${margin})`)
       .attr("class", "bars")
       .selectAll("rect")
       .data(indata)
@@ -365,6 +344,7 @@
           .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},${y(d.ratio)})`)
 
     chart.append("g")
+      .attr("transform", `translate(0,${margin})`)
       .attr("class", "shadowbars")
       .selectAll("rect")
       .data(indata)
@@ -375,17 +355,14 @@
           .attr("opacity", "0")
           .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},0)`)
           .on("mouseover", function(d) {
+              let pos = getPosition(this);
               tooltip
                 .style('display', '')
+                .style('left', pos.x+"px")
+                .style('top', (pos.y+height-margin)+"px")
                 .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
+  
                 setPoll(d.votes, document.getElementById('votelist'))
-          })
-          .on("mousemove", function() {
-            let mouse = d3.mouse(this)
-            let p = getPosition(this, x, y);
-            tooltip
-              .style('left', p[0] + "px")
-              .style('top', p[1] + "px")
           })
           .on("mouseout", function() {
             return;
@@ -393,16 +370,19 @@
               .style('display', 'none')
               .text("")
           })
+  
+    chart.append("g")
+      .attr("transform", `translate(0,${height-margin})`)
+      .call(xAxis)
   }
   voteRequest.open('get', '/votes');
   voteRequest.send();
 })()
 
-function getPosition(ctx, x, y) {
-  let mouse = d3.mouse(ctx)
+function getPosition(ctx) {
   let rel = ctx.getBoundingClientRect();
-  return [
-    rel.x + window.pageXOffset + mouse[0],
-    rel.y + window.pageYOffset + mouse[1]
-  ]
+  return {
+    x: rel.x + window.pageXOffset,
+    y: rel.y + window.pageYOffset
+  }
 }
