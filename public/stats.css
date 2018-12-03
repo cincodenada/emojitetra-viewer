@@ -17,6 +17,17 @@
   position: absolute;
 }
 
+.scores path.line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.scores .subaxis .domain {
+  stroke-dasharray: 5 10;
+  stroke: #666;
+}
+
 .votes .tooltip::after {
   content: "";
   border: solid;
@@ -27,6 +38,18 @@
   left: 2px;
 }
 
+.votes .line {
+  fill: none;
+  stroke-width: 2;
+  stroke: blue;
+}
+.votes .count_label {
+  fill: blue;
+}
+
 .bars rect {
   fill: lightblue;
+}
+.bars rect:hover {
+  fill: cyan;
 }

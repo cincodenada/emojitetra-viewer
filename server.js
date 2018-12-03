@@ -110,16 +110,18 @@ app.get("/scores", function (request, response) {
 })
 
 app.get("/votes", function(request, response) {
-  db.allAsync("SELECT CAST(id AS TEXT) id, timestamp, poll_data FROM boards WHERE is_board ORDER BY timestamp DESC LIMIT 50")
+  console.log("Requesting votes...")
+  db.allAsync("SELECT CAST(id AS TEXT) id, timestamp, poll_data FROM boards WHERE is_board ORDER BY timestamp DESC LIMIT 200")
     .then(polls => {
+      console.log("Processing votes")
       let results = [];
       for(let p of polls) {
         let poll_json = JSON.parse(p.poll_data);
+        if(!poll_json.counts_are_final) { continue; }
         let bits = {
           'label': [],
           'count': [],
         };
-        console.log(poll_json)
         for(let k in poll_json) {
           let match = k.match(/choice(\d+)_(\w+)/)
           if(match) {
@@ -130,13 +132,11 @@ app.get("/votes", function(request, response) {
         for(let idx in bits.label) {
           votes[bits.label[idx]] = bits.count[idx]         
         }
-        console.log(votes)
         results.push({
           id: p.id,
           timestamp: p.timestamp,
           votes: votes
         })
-        console.log(results)
       }
       response.json(results);
     })

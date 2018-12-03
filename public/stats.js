@@ -1,17 +1,48 @@
-(function() {
- 
+function ScoreChart() {
+  let points_per_hour = 1200;
+  let dotted_end = 1e5;
   
-  let dreamRequest = new XMLHttpRequest();
-  dreamRequest.onload = function(){
+  let width = 960;
+  let height = 960;
+  let margin = 50;
+  let separation = 5000;
+
+  /* Prepare the chart elements */
+  let container = d3.select('#scores')
+  let chart = container
+    .append('svg')
+    .attr('width', width)
+    .attr('height', height)
+  
+  let x = d3.scaleLinear()
+  let y = d3.scaleLinear()
+  let color = d3.scaleOrdinal(d3.schemePaired)
+  
+  let xAxis = d3.axisBottom(x).ticks(width / 80).tickSizeOuter(0)
+  let xAxisElm = chart.append("g")
+    .attr("transform", `translate(0,${height - margin})`)
+  
+  
+  let yAxes = chart.append("g")
+      .selectAll("g")
+  
+  // line
+  let line = d3.line()
+    .defined(d => !isNaN(d.score))
+    .x(d => x(d.time))
+    .y((d, i) => y(d.score))
+  
+  let lines = chart.append("g").selectAll("path")
+
+  function loadData() {
     let indata = JSON.parse(this.responseText)
     indata.sort((a, b) => d3.ascending(a[0], b[0]));
-    let separation = 5000;
     let start = null;
     let last_score = null
     let data = []
     let curdata = []
     let idx = 0;
-    
+
     for(let d of indata) {
       if(!start || (d[1] == 0 && last_score != 0)) {
         if(curdata.length) {
@@ -39,52 +70,25 @@
       last: last_point,
       data: curdata,
     })
-    
-    data.sort((a, b) => a.points_per_hour - b.points_per_hour)
-    
-    let num_series = data.length;
 
-    let score = 0, time = 0;
-    let points_per_hour = 1200;
-    let dotted_end = 1e5;
+    data.sort((a, b) => a.points_per_hour - b.points_per_hour)
+
+    let num_series = data.length;
 
     for(let s=0; s < num_series; s++) {
       let cur_series = data[s]
       cur_series.sort_idx = s;
-      /*
-      let last_point = cur_series.data[cur_series.data.length-1];
-      let max_time = Math.max(last_point.time, last_point.score/points_per_hour)
-      let max_score = Math.max(last_point.score, last_point.time*points_per_hour)
-      data.push({
-        start: data[s].start,
-        sort_idx: s,
-        fit: true,
-        last: last_point,
-        data: [{time:0,score:0},{time:last_point.time,score:last_point.time*points_per_hour}]
-      })
-      */
     }
-    //data.sort((a, b) => (a.sort_idx == b.sort_idx) ? (!!b.fit - !!a.fit) : (a.sort_idx - b.sort_idx));
 
-    let width = 1000;
-    let height = 1000;
-    let margin = 50;
-
-    let container = d3.select('#scores')
-    let chart = container
-      .append('svg')
-      .attr('width', width)
-      .attr('height', height)
-
-    
-    let x = d3.scaleLinear()
-      .domain([0, d3.max(data, d => d3.max(d.data, d => d.time))])
+    x.domain([0, d3.max(data, d => d3.max(d.data, d => d.time))])
       .range([margin, width - margin])
-
-    let y = d3.scaleLinear()
-      .domain([0, d3.max(data, d => d3.max(d.data, d=> d.score))]).nice()
+    y.domain([0, d3.max(data, d => d3.max(d.data, d=> d.score))]).nice()
 //      .domain([-10000, 10000]).nice()
       .range([height - margin, margin])
+    color.domain(d3.map(data, d => d.start).keys())
+
+    // x axis
+    xAxisElm.call(xAxis)
 
     let rot_angle = Math.atan((y(points_per_hour)-y(0))/(x(1)-x(0)))
     let rot_deg = rot_angle*180/Math.PI
@@ -94,59 +98,33 @@
 
       let max_time = Math.max(d.last.time, d.last.score/points_per_hour)
       let max_score = Math.max(d.last.score, d.last.time*points_per_hour)
-      
+
       let ys = d3.scaleLinear()
         .domain([0, max_score])
         .range([y(0), y(max_score/-Math.sin(rot_angle))])
-      
-      let axis = d3.axisRight(ys).tickSize(0)
-      let a = d3.select(this).call(axis)
-      a.select(".domain")
-        .attr("stroke-dasharray", "5 10")
-        .attr("stroke", "#666")
-      a.selectAll(".tick").remove()
-      /*
-      attr("transform", function() {
-        return d3.select(this).attr("transform") + ` rotate(${270-rot_deg})`
-      })
-      */
-    }
-    let color = d3.scaleOrdinal(d3.schemePaired)
-      .domain(d3.map(data, d => d.start).keys())
-    
-    // x axis
-    chart.append("g")
-      .attr("transform", `translate(0,${height - margin})`)
-      .call(d3.axisBottom(x).ticks(width / 80).tickSizeOuter(0))
 
+      let axis = d3.axisRight(ys).tickSize(0)
+      let a = d3.select(this)
+        .attr("class", "subaxis")
+        .call(axis)
+      a.selectAll(".tick").remove()
+    }
+    
     // y axes
-    chart.append("g")
-      .selectAll("g")
+    yAxes
       .data(data)
       .enter().append("g")
         .attr("transform", d => `translate(0,${y(0) - y((d.sort_idx-num_series+1)*separation)}) rotate(${90+rot_deg},${x(0)},${y(0)}) translate(${margin},0)`)
         .each(axisSlanted)
-    
-    // line
-    let line = d3.line()
-      .defined(d => !isNaN(d.score))
-      .x(d => x(d.time))
-      .y((d, i) => y(d.score))
-    
+
     // data it up 
-    chart.append("g").selectAll("path")
-      .data(data)
+    lines.data(data)
       .enter().append("path")
-      .attr("class", "line")
-      .attr("fill", "none")
-      .attr("stroke", (d, i) => d.fit ? '#666' : color(i))
-      .attr("stroke-width", d => d.fit ? 1 : 1.5)
-      .attr("stroke-linejoin", "round")
-      .attr("stroke-linecap", "round")
-      .attr("stroke-dasharray", d => d.fit ? "5 10" : "")
-      .attr("transform", d => `translate(0,${y(0) - y((d.sort_idx-num_series+1)*separation)})`)
-      .attr("d", d => line(d.data))
-    
+        .attr("class", "line")
+        .attr("stroke", (d, i) => color(i))
+        .attr("transform", d => `translate(0,${y(0) - y((d.sort_idx-num_series+1)*separation)})`)
+        .attr("d", d => line(d.data))
+
     chart
       .on("mouseover", d => {
         tooltip.transition()
@@ -155,11 +133,8 @@
         tooltip
           .style("left",(d3.event.pageX) + "px")
           .style("top",(d3.event.pageY) + "px")
-        
-        console.log(d)
       })
 
-    
     // Lifted from https://stackoverflow.com/a/34887578/306323
     // append a g for all the mouse over nonsense
     var mouseG = chart.append("g")
@@ -171,9 +146,6 @@
       .style("stroke", "black")
       .style("stroke-width", "1px")
       .style("opacity", "0");
-
-    // keep a reference to all our lines
-    var lines = document.getElementsByClassName('line');
 
     let text_margin = 5
     let circle_radius = 7
@@ -206,7 +178,7 @@
       .style("stroke-width", "1px")
 
     let timeFormat = d3.timeFormat("%e %b")
-    
+
     // rect to capture mouse movements
     mouseG.append('svg:rect')
       .attr('width', width)
@@ -229,7 +201,7 @@
       })
       .on('mousemove', function() { // mouse moving over canvas
         let mouse = d3.mouse(this);
-      
+
         // move the vertical line
         d3.select(".mouse-line")
           .attr("d", function() {
@@ -267,20 +239,75 @@
               .style('display','')
               .style('left', (pos.x + textpos[0]) + "px")
               .style('top', (pos.y + textpos[1] + adj_y) + "px")
-          
+
             // return position
             return "translate(" + xpos + "," + (pos.y + adj_y) + ")";
           });
-
       });
-    
-    
-  };
-  dreamRequest.open('get', '/scores');
-  dreamRequest.send();
+  }
   
-  let voteRequest = new XMLHttpRequest();
-  voteRequest.onload = function() {
+  this.requestData = function() {
+    let dreamRequest = new XMLHttpRequest();
+    dreamRequest.onload = loadData;
+    dreamRequest.open('get', '/scores');
+    dreamRequest.send();  
+  }
+}
+
+function VotesChart() {
+  let width = 960;
+  let height = 200;
+  let margin = 20;
+  let voteFormat = d3.timeFormat("%e %b %H:%M")
+  
+  /* Initialize elements */
+  let container = d3.select('#votes')
+  let chart = container.append('svg')
+    .attr('width', width)
+    .attr('height', height);
+  
+  let tooltip = container.append('div')
+    .attr('class','tooltip')
+    .style('display', 'none')
+  
+  let x = d3.scaleTime()
+  let y = d3.scaleLinear()
+  let y_count = d3.scaleLinear()
+  
+  let xAxis = d3.axisBottom(x)
+  let countAxis = d3.axisRight(y_count)
+
+  let bars = chart.append("g")
+    .attr("transform", `translate(0,${margin})`)
+    .attr("class", "bars")
+    .selectAll("rect")
+  
+  let shadowbars = chart.append("g")
+    .attr("transform", `translate(0,${margin})`)
+    .attr("class", "shadowbars")
+    .selectAll("rect")
+  
+  let xAxisElm = chart.append("g")
+      .attr("transform", `translate(0,${height-margin})`)
+  let countAxisElm = chart.append("g")
+    .attr("transform", `translate(${width-margin*3},0)`)
+
+  // y label
+  chart.append("text")
+    .attr("class", "count_label")
+    .attr("text-anchor", "middle")
+    .attr("transform", `translate(${width-margin},${height/2}) rotate(90)`)
+    .text("Total number of votes");
+  
+  // line
+  let line = d3.line()
+    .defined(d => !isNaN(d.total))
+    .x(d => x(d.timestamp))
+    .y(d => y_count(d.total))
+  
+  let votesline = chart.append("path")
+  
+  function loadData() {
     let indata = JSON.parse(this.responseText)
     
     let minmax = (domain, value) => {
@@ -288,8 +315,12 @@
       if(!domain[1] || domain[1] < value) { domain[1] = value; }
     }
     
+    // bar width, in ms
+    let barwidth = (20*60*1000)*0.9
+    
     let dtime = []
     let dratio = []
+    let dtotal = []
     for(let d of indata) {
       let total = 0;
       let winner;
@@ -306,83 +337,69 @@
       d.timestamp = new Date(d.timestamp*1000)
       minmax(dtime, d.timestamp);
       minmax(dratio, d.ratio);
+      minmax(dtotal, d.total);
     }
-    console.log(indata)
-    console.log(dratio)
-    console.log(dtime)
     
-    let width = 1000;
-    let height = 200;
-    let margin = 20;
-    
-    let container = d3.select('#votes')
-    let chart = container.append('svg')
-      .attr('width', width)
-      .attr('height', height);
-    
-    let tooltip = container.append('div')
-      .attr('class','tooltip')
-      .style('display', 'none')
-    
-    let x = d3.scaleTime()
-      .domain(dtime)
-      .range([margin, width-margin*2])
-    
-    let y = d3.scaleLinear()
-      .domain([0,dratio[1]])
+    x.domain([new Date(dtime[0].getTime()-barwidth/2), new Date(dtime[1].getTime()+barwidth/2)])
+      .range([margin, width-margin*3])
+    y.domain([0,dratio[1]])
       .range([height-margin*2, margin])
-    
-    let xAxis = d3.axisBottom(x)
-    
-    let voteFormat = d3.timeFormat("%e %b %H:%M")
+    y_count.domain([0, dtotal[1]])
+      .range([height-margin, margin])
 
-    // bar width, in ms
-    let barwidth = x((20*60*1000)*0.9)-x(0);
-    chart.append("g")
-      .attr("transform", `translate(0,${margin})`)
-      .attr("class", "bars")
-      .selectAll("rect")
-      .data(indata)
-      .enter()
-        .append("rect")
-          .attr("width", barwidth)
-          .attr("height", d => Math.abs(y(d.ratio) - y(0)))
-          .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},${y(d.ratio)})`)
+    xAxisElm.call(xAxis)
+    countAxisElm.call(countAxis)
+    
+    let barpx = x(barwidth)-x(0);
+    bars.data(indata).enter()
+      .append("rect")
+        .attr("width", barpx)
+        .attr("height", d => Math.abs(y(d.ratio) - y(0)))
+        .attr("transform", d => `translate(${x(d.timestamp)},${y(d.ratio)})`)
 
-    chart.append("g")
-      .attr("transform", `translate(0,${margin})`)
-      .attr("class", "shadowbars")
-      .selectAll("rect")
-      .data(indata)
-      .enter()
-        .append("rect")
-          .attr("width", barwidth)
-          .attr("height", height)
-          .attr("opacity", "0")
-          .attr("transform", d => `translate(${x(d.timestamp)-barwidth/2},0)`)
-          .on("mouseover", function(d) {
-              let pos = getPosition(this);
-              tooltip
-                .style('display', '')
-                .style('left', pos.x+"px")
-                .style('top', (pos.y+height-margin)+"px")
-                .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
-  
-                setPoll(d.votes, document.getElementById('votelist'))
-          })
-          .on("mouseout", function() {
-            return;
+    shadowbars.data(indata).enter()
+      .append("rect")
+        .attr("width", barpx)
+        .attr("height", height)
+        .attr("opacity", "0")
+        .attr("transform", d => `translate(${x(d.timestamp)},0)`)
+        .on("mouseover", function(d) {
+            let pos = getPosition(this);
             tooltip
-              .style('display', 'none')
-              .text("")
-          })
+              .style('display', '')
+              .style('left', pos.x+"px")
+              .style('top', (pos.y+height-margin)+"px")
+              .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
+
+              setPoll(d.votes, document.getElementById('votelist'))
+        })
+        .on("mouseout", function() {
+          return;
+          tooltip
+            .style('display', 'none')
+            .text("")
+        })
   
-    chart.append("g")
-      .attr("transform", `translate(0,${height-margin})`)
-      .call(xAxis)
+    // data it up 
+    votesline.datum(indata)
+      .attr("class", "line")
+      .attr("d", line)
   }
-  voteRequest.open('get', '/votes');
-  voteRequest.send();
+  
+  this.requestData = function() {
+    let voteRequest = new XMLHttpRequest();
+    voteRequest.onload = loadData;
+    voteRequest.open('get', '/votes');
+    voteRequest.send();
+  }
+}
+
+(function() {
+  let scores = new ScoreChart();
+  scores.requestData();
+  
+  let votes = new VotesChart();
+  votes.requestData(); 
 })()
 
 function getPosition(ctx) {
