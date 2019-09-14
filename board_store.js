@@ -15,7 +15,7 @@ function parse_score(board) {
   if(board.startsWith("RT")) {
     return null;
   }
-  
+
   for(var idx in score_re) {
     var re = score_re[idx];
     var matches = re.exec(board);
