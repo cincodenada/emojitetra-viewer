@@ -234,46 +234,79 @@ app.get("/invalidate", function(request, response) {
 // which I use to maintain and debug stuff
 //=================================================
 
+/*
+sqlite> .schema
+CREATE TABLE boards (id BIGINT, board TEXT, timestamp INTEGER, json TEXT, poll_data TEXT, is_board INTEGER);
+CREATE TABLE "sampled_data" (tweet_id BIGINT, timestamp INTEGER, poll_data TEXT, retweets INT, likes INT);
+CREATE UNIQUE INDEX board_id ON boards(id);
+CREATE UNIQUE INDEX tweet_timestamp ON "sampled_data"(tweet_id, timestamp);
+CREATE TABLE board_meta(board_id BIGINT, prev_id INT, prev_board_id INT, score INT, role INT, replies INT, retweets INT, likes INT);
+CREATE UNIQUE INDEX meta_id ON board_meta(board_id);
+CREATE UNIQUE INDEX poll_unique ON "sampled_data"(tweet_id, timestamp);
+*/
+
 app.get("/check", function(request, response) {
 
 
-  let query = "SELECT CAST(id AS TEXT) id_str, board, CAST(prev_id AS STRING) prev_id, CAST(prev_board_id AS STRING) prev_board_id, role, timestamp FROM boards b LEFT JOIN board_meta bm ON bm.board_id=b.id ORDER BY id DESC";
+  let query = "SELECT CAST(id AS TEXT) id_str, board, CAST(reply_id AS STRING) reply_id, CAST(quoted_id AS STRING) quoted_id, CAST(prev_board_id AS STRING) prev_board_id, role, timestamp, score FROM boards b LEFT JOIN board_meta bm ON bm.board_id=b.id ORDER BY id DESC";
   if(request.query.limit) { query += " LIMIT " + parseInt(request.query.limit) }
   db.allAsync(query).then((boards) => {
-      response.writeHead(200, {
-    'Content-Type': 'text/html; charset=utf-8',
-  });
-    let expected_prev, expected_prev_board, expected_prev_cont;
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', });
+    response.write(`
+      <style>
+        body { width: 200%; overflow-x: scroll; }
+        .board { width: 10px; height: 10px; border: 1px solid black; }
+      </style>
+    `);
+
+
+    let expected = {};
+    let ref_icons = ['↛','→','⇒','⇛','↠','⤀','⤁'];
+    let prev_day;
     console.log(boards[0])
     for(let b of boards) {
       let tweet_time = new Date(b.timestamp*1000);
+      if(tweet_time.getDate() != prev_day) { response.write("<br/>" + tweet_time.getFullYear() + '-' + (tweet_time.getMonth() + 1) + '-' + tweet_time.getDate()); }
+      prev_day = tweet_time.getDate();
+
+      let num_refs = 0;
+      for(let type in expected) {
+        if(b.id_str == expected[type]) {
+          expected_type = null;
+          num_refs++;
+        }
+      }
+      let ref = ref_icons[num_refs];
+
       if(b.board.indexOf("◽") > -1) {
-        let prefix_char = "┣";
-        let check_char = "🔹";
-        let applicable_prev = expected_prev || expected_prev_cont;
-        if(applicable_prev) {
-          check_char = (b.id_str == applicable_prev) ? "✔️" : "❓️";
+        if(b.board.indexOf("+") > -1) {
+          board_char = "💥";
+          link = 'https://twitter.com/EmojiTetra/status/' + b.id_str;
+        } else {
+          board_char = "◼";
+          link = '/' + b.id_str ;
         }
-        let check_board_char = "🔹";
-        if(expected_prev_board) {
-          check_board_char = (b.id_str == expected_prev_board) ? "✔️" : "❓️";   
-        }
-        response.write(check_char + check_board_char + prefix_char + '<a href="/' + b.id_str + '">Board ' + tweet_time + '</a><br/>\n');
-        expected_prev = b.prev_id;
-        expected_prev_board = b.prev_board_id;
-        expected_prev_cont = null;
+
+        response.write(ref + '<a href="' + link + '" style="color:rgb(0,' + b.score/500 + ',0)">' + board_char + '</a>');
+
+        expected['prev'] = b.reply_id;
       } else if(b.board.indexOf("Game continues") == 0) {
-        response.write('❇️➿️╞<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">Continues-&gt; ' + tweet_time + '</a><br/>\n');
-        expected_prev_cont = b.prev_id;
+        response.write(ref + '<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">◉</a>');
+
+        expected['continues_reply'] = b.reply_id;
+        expected['continues_quote'] = b.quoted_id;
       } else if(b.board.indexOf("Continuing game") == 0) {
-        let status = (expected_prev && b.id_str == expected_prev) ? "✔️" : "❓️";
-        response.write(status + '➿️╞<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">-&gt;Continuing ' + tweet_time + '</a><br/>\n');
-        expected_prev = null;
+        response.write(ref + '<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">○</a>');
+
+        expected['continuing_quote'] = b.quoted_id;
       } else {
-        response.write('⭕⭕<a href="/' + b.id_str + '">Other: ' + b.board + ' @ ' + tweet_time + '</a><br/>\n');
+        response.write('<a href="https://twitter.com/EmojiTetra/status/' + b.id_str + '">📄</a>');
       }
     }
     response.end();
+  }).catch(e => {
+    console.log(e);
+    response.send(e);
   });
 })
 
