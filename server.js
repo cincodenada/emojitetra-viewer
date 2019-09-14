@@ -354,6 +354,8 @@ app.get("/fill_meta/:count", (request, response) => {
       'json_extract(json, "$.in_reply_to_status_id_str"),' +
       'json_extract(json, "$.quoted_status_id_str")' +
     ') prev_id,' +
+    'json_extract(json, "$.in_reply_to_status_id_str") reply_id,' +
+    'json_extract(json, "$.quoted_status_id_str") quoted_id,' +
     '(SELECT id FROM boards WHERE timestamp < b.timestamp AND is_board ORDER BY timestamp DESC LIMIT 1) prev_board_id,' +
     'NULL score,' +
     'NULL role,' +
