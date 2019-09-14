@@ -101,3 +101,7 @@ footer {
 }
 
 #fps { width: 3em; }
+
+.label_left {
+  text-anchor: end;
+}

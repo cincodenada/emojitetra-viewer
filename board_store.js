@@ -5,18 +5,41 @@ const Log = require("log");
 const log = new Log("info");
 
 function parse_score(board) {  
-  const board_re = [
-    RegExp('Score\n\\D+(\\d+)'),
+  const score_re = [
+    RegExp('Score\n[^\\d\n]+(\\d+)'),
     RegExp('Score (\\d+)'),
     RegExp('^(\\d\\S+)'),
   ]
   
-  for(var idx in board_re) {
-    var re = board_re[idx];
+  // Quick hack to skip RTs
+  if(board.startsWith("RT")) {
+    return null;
+  }
+  
+  for(var idx in score_re) {
+    var re = score_re[idx];
     var matches = re.exec(board);
     if(matches) {
       return parseInt(matches[1].replace(/\D/g,""));
     }
+  }
+  
+  return null;
+}
+
+function parse_clears(board) {
+  const clear_re = [
+    RegExp('\\+(\\d+)'),
+  ]
+  
+  for(var idx in clear_re) {
+    var re = clear_re[idx];
+    let total = 0;
+    var matches = re.exec(board);
+    while(matches) {
+      total += parseInt(matches[1].replace(/\D/g,""))
+    }
+    if(total) { return total; }
   }
   
   return null;
@@ -28,6 +51,7 @@ class Board {
     this.id = BigInt(board_info.id_str);
     this.timestamp = board_info.timestamp;
     this.score = parse_score(this.board);
+    this.clears = parse_clears(this.board);
     this.role = board_info.role;
     this.parsePoll(board_info.poll_data);
   }

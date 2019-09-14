@@ -6,6 +6,8 @@ function ScoreChart() {
   let height = 960;
   let margin = 50;
   let separation = 5000;
+  
+  let timeFormat = d3.timeFormat("%e %b")
 
   /* Prepare the chart elements */
   let container = d3.select('#scores')
@@ -25,6 +27,16 @@ function ScoreChart() {
   
   let yAxes = chart.append("g")
       .selectAll("g")
+  
+  // x label
+  chart.append("text")
+    .attr("class", "axis_label")
+    .attr("text-anchor", "middle")
+    .attr("transform", `translate(${width/2},${height-margin*0.25})`)
+    .text("Days Played");
+  
+  // y labels
+  let ylabs = chart.append("g").selectAll("text")
   
   // line
   let line = d3.line()
@@ -81,7 +93,7 @@ function ScoreChart() {
     }
 
     x.domain([0, d3.max(data, d => d3.max(d.data, d => d.time))])
-      .range([margin, width - margin])
+      .range([margin*2, width - margin])
     y.domain([0, d3.max(data, d => d3.max(d.data, d=> d.score))]).nice()
 //      .domain([-10000, 10000]).nice()
       .range([height - margin, margin])
@@ -114,9 +126,16 @@ function ScoreChart() {
     yAxes
       .data(data)
       .enter().append("g")
-        .attr("transform", d => `translate(0,${y(0) - y((d.sort_idx-num_series+1)*separation)}) rotate(${90+rot_deg},${x(0)},${y(0)}) translate(${margin},0)`)
+        .attr("transform", d => `translate(0,${y(0) - y((d.sort_idx-num_series+1)*separation)}) rotate(${90+rot_deg},${x(0)},${y(0)}) translate(${margin*2},0)`)
         .each(axisSlanted)
-
+    
+    ylabs
+      .data(data)
+      .enter().append("text")
+        .attr("class","axis_label label_left")
+        .attr("transform", d => `translate(${margin*1.9},${y((num_series-d.sort_idx-1)*separation)})`)
+        .text(d => timeFormat(d.start*1000))
+    
     // data it up 
     lines.data(data)
       .enter().append("path")
@@ -176,8 +195,6 @@ function ScoreChart() {
       })
       .style("fill", "none")
       .style("stroke-width", "1px")
-
-    let timeFormat = d3.timeFormat("%e %b")
 
     // rect to capture mouse movements
     mouseG.append('svg:rect')
@@ -369,7 +386,7 @@ function VotesChart() {
               .style('display', '')
               .style('left', pos.x+"px")
               .style('top', (pos.y+height-margin)+"px")
-              .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
+              .html(`<a href="/${d.id}">${voteFormat(d.timestamp)}</a><br/>${d.total} total votes<br/>Contentiousness: ${(d.ratio*100).toFixed(0)}%<br><div id="votelist"></div>`)
 
               setPoll(d.votes, document.getElementById('votelist'))
         })

@@ -6,6 +6,8 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
 };
 
+const baseurl = "https://emojitetra-viewer.5of0.co";
+
 // Binary search whee
 function bin_search(a, value, closest_dir, wrap) {
   var lo = 0, hi = a.length - 1, mid;
@@ -267,7 +269,7 @@ function BoardBin() {
           if(cb) { cb() }
           resolve();
         };
-        dreamRequest.open('get', '/boards' + qs);
+        dreamRequest.open('get', baseurl + '/boards' + qs);
         dreamRequest.send();
       });
     }
@@ -284,7 +286,7 @@ function BoardBin() {
       self.addBoards(response, false);
       if(cb) { cb() }
     };
-    dreamRequest.open('get', '/boards?special&count=10000');
+    dreamRequest.open('get', baseurl + '/boards?special&count=10000');
     dreamRequest.send();
   }
   
@@ -433,15 +435,13 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   let final_boards = [];
   let idmap = {};
   
-  // If we have a play speed param, set it
-  if(play_speed) {
-    set_fps(play_speed);
-  }
-  
   let load_boards = cur_tweet ? boards.getId(cur_tweet) : boards.getLatest();
   load_boards.then(board => {
     renderBoard(board)
-    if(play_speed) { play_step(); }
+    if(play_speed) {
+      set_fps(play_speed);
+      play_step();
+    }
   });
   
   boards.getSpecial(function() {
@@ -475,8 +475,8 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   const nextStart = document.getElementById('nextStart');
   const current = document.getElementById('current');
   const date = document.getElementById('date');
-  const permalink = document.getElementById('permalink');
   const fps = document.getElementById('fps');
+  const permalinks = document.querySelectorAll('.permalink');
   const board_re = [
     RegExp('^(\\d+)'),
     RegExp('Score (\\d+)'),
@@ -493,7 +493,7 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
     date_link.href = "https://twitter.com/EmojiTetra/status/" + cboard.id;
     date.innerHTML = "";
     date.appendChild(date_link);
-    permalink.href = "/" + cboard.id;
+    permalinks.forEach(l => l.href = "/" + cboard.id);
     
     
     if(cboard.role == "end") {
@@ -558,33 +558,48 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   
   const set_fps = function(fps) {
     play_delay = 1000/fps;
+    // If we're animating, restart it at the new speed
     if(play_timeout) {
-      clearInverval(play_timeout);
+      clearInterval(play_timeout);
+      play_timeout = null;
       play_step();
     }
   }
   
+  const stop_anim = function() {
+    if(play_timeout) {
+      clearInterval(play_timeout)
+      play_timeout = null;
+      play.innerHTML="Play";
+    }
+  }
+  
   prevStart.onclick = function(event) {
-    clearInterval(play_timeout);
+    stop_anim();
     stepStart(-1);
   }
   prev.onclick = function(event) {
-    clearInterval(play_timeout);
+    stop_anim();
     stepBoard(-1);
   }
   play.onclick = function(event) {
-    play_step();
+    if(play_timeout) {
+      stop_anim();
+    } else {
+      play_step();
+      play.innerHTML="Stop";
+    }
   }
   next.onclick = function(event) {
-    clearInterval(play_timeout);
+    stop_anim();
     stepBoard(1);
   }
   nextStart.onclick = function(event) {
-    clearInterval(play_timeout);
+    stop_anim();
     stepStart(1);
   }
   current.onclick = function(event) {
-    clearInterval(play_timeout);
+    stop_anim();
     boards.getLatest().then(renderBoard);
   }
   
@@ -595,6 +610,8 @@ function EmojiWrapper(emoji_sheet, activate_checkbox, notify_elm) {
   }
   
   fps.onchange = function(event) {
+    console.log(this);
+    console.log(event);
     if(this.value) { set_fps(this.value); }
   }
 })()

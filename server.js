@@ -8,6 +8,7 @@ var express = require('express');
 var bodyParser = require('body-parser');
 var Twitter = require('twitter');
 var compression = require('compression');
+var md = require('md');
 
 var app = express();
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -66,6 +67,29 @@ const board_precache = './.data/board_precache.json';
 const preload_boards = 10;
 
 //========================
+// User-facing pages
+//========================
+
+app.get("/:id(\\d+)?", function (request, response) {
+  response.render(__dirname + '/views/index.html', {
+    tweet_id: request.params.id,
+    play_speed: request.query.play_speed,
+  });
+});
+
+app.get("/stats", function (request, response) {
+  response.render(__dirname + '/views/stats.html');
+})
+
+app.get("/updates", function(request, response) {
+  fs.readFile(__dirname + '/CHANGELOG.md', (err, data) => {
+    if(err) throw err;
+    response.send(md(data.toString()));
+  });
+})
+
+
+//========================
 // Web client API methods
 //========================
 
@@ -96,12 +120,6 @@ app.get("/update", function (request, response) {
   })
 });
 
-app.get("/:id(\\d+)?", function (request, response) {
-  response.render(__dirname + '/views/index.html', {
-    tweet_id: request.params.id,
-    play_speed: request.query.play_speed,
-  });
-});
 
 app.get("/scores", function (request, response) {
   db.allAsync("SELECT timestamp, score FROM boards b LEFT JOIN board_meta bm ON b.id=bm.board_id WHERE is_board")
@@ -143,9 +161,7 @@ app.get("/votes", function(request, response) {
     .catch(err => response.json(err))
 })
 
-app.get("/stats", function (request, response) {
-  response.render(__dirname + '/views/stats.html');
-})
+
 //========================
 // Twitter auth endpoints
 //========================
@@ -219,12 +235,14 @@ app.get("/invalidate", function(request, response) {
 //=================================================
 
 app.get("/check", function(request, response) {
+
+
   let query = "SELECT CAST(id AS TEXT) id_str, board, CAST(prev_id AS STRING) prev_id, CAST(prev_board_id AS STRING) prev_board_id, role, timestamp FROM boards b LEFT JOIN board_meta bm ON bm.board_id=b.id ORDER BY id DESC";
   if(request.query.limit) { query += " LIMIT " + parseInt(request.query.limit) }
   db.allAsync(query).then((boards) => {
-    response.writeHead(200, {
-      'Content-Type': 'text/html; charset=utf-8',
-    });
+      response.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+  });
     let expected_prev, expected_prev_board, expected_prev_cont;
     console.log(boards[0])
     for(let b of boards) {
@@ -257,6 +275,12 @@ app.get("/check", function(request, response) {
     }
     response.end();
   });
+})
+
+app.get("/check.json", function(request, response) {
+  let query = "SELECT CAST(id AS TEXT) id_str, CAST(prev_id AS STRING) prev_id, CAST(prev_board_id AS STRING) prev_board_id, role, timestamp FROM boards b LEFT JOIN board_meta bm ON bm.board_id=b.id ORDER BY id DESC";
+  if(request.query.limit) { query += " LIMIT " + parseInt(request.query.limit) }
+  db.allAsync(query).then(boards => response.json(boards))
 })
 
 app.get("/fill", function(request, response) {

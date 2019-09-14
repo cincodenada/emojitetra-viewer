@@ -46,14 +46,15 @@
       <p class="bold">Oh hi,</p>
       <p>Here's what's been happening on <a href="https://twitter.com/emojitetra">@emojitetra</a>:</p>
       <section class="board">
-        <button id="current">Latest Tweet</button><br/>
-        <button id="prevStart">&lt;&lt;</button>
+        <button title="As of when you loaded the page, anyway" id="current">Latest Tweet</button><br/>
+        <button title="Skip to the previous start/end of a game" id="prevStart">&lt;&lt;</button>
         <button id="prev">&lt;</button>
-        <button id="play">Play</button>
+        <button title="Automatically step through the game, using the Frames Per Second value below" id="play">Play</button>
         <button id="next">&gt;</button>
-        <button id="nextStart">&gt;&gt;</button>
+        <button title="Skip to the next start/end of a game" id="nextStart">&gt;&gt;</button>
         <br/>
         <span id="date"></span>
+        <a class="permalink" href="/{{tweet_id}}">🔗Permalink</a><br/>
         <hr/>
         <div id="current">
           <div id="board">Loading tweets...</div>
@@ -71,16 +72,17 @@
         <span>Replay Frames Per Second: <input autocomplete="off" id="fps" type="number" value="1"></span>
       </form>
       <section>
-      I've recently done a lot of reworking on the backend to load smaller bits and make everything much faster. Everything should be put back together, but if you notice anything strange,
-      tweet or DM me at <a href="https://twitter.com/cincodenada">@cincodenada</a>.<br/>
-      Also, a small improvement that actually inspried the whole rework: you're looking at the current state of the game (as of a minute ago max), not a move or two behind. Yay! 😄
+        You can copy this <a class="permalink" href="/{{tweet_id}}">🔗Permalink</a> to link to this specific point here on the viewer!<br/>
+      </section>
+      <hr/>
+      <section>
+        <a href="/stats">Stats</a> | <a href="/updates">Updates</a>
       </section>
     </main>
 
     <footer>
-      <a id="permalink" href="/{{tweet_id}}">🔗Permalink</a><br/>
       Made with <a href="https://glitch.com">Glitch</a> by <a href="https://twitter.com/cincodenada">@cincodenada</a>. Source on <a href="https://gitlab.com/cincodenada/emojitetra-viewer">GitLab</a> and <a href="https://glitch.com/~emojitetra-viewer">right here on Glitch</a><br/>
-      Submit bug reports and/or ideas on the <a href="https://gitlab.com/cincodenada/emojitetra-viewer/issues">GitLab Issue Tracker</a><br/>
+      Submit bug reports/questions/ideas on the <a href="https://gitlab.com/cincodenada/emojitetra-viewer/issues">GitLab Issue Tracker</a>, or tweet at me <a href="https://twitter.com/cincodenada">@cincodenada</a>.
     </footer>
     
     <!-- import the webpage's client-side javascript file -->
