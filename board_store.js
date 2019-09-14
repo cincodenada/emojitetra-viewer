@@ -87,7 +87,7 @@ module.exports = class BoardStore {
       var existing_tweets = [];
       if(recent_tweets) {
         var last_tweet = recent_tweets[recent_tweets.length-1];
-        var last_timestamp = new Date(last_tweet.timestamp);
+        var last_timestamp = new Date(last_tweet.timestamp*1000);
         existing_tweets = recent_tweets.map(t => t.id_str);
         // Subtract 1 so we include the last tweet as well
         last_id = BigInt(last_tweet.id_str).subtract(1).toString();
