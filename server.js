@@ -263,12 +263,21 @@ app.get("/check", function(request, response) {
     let expected = {};
     let ref_icons = ['↛','→','⇒','⇛','↠','⤀','⤁'];
     let prev_day;
+    let day_ms = 24*60*60*1000;
+    let cur_day = new Date();
+    cur_day.setDate(cur_day.getDate() + 1);
+    cur_day.setHours(0);
+    cur_day.setMinutes(0);
+    cur_day.setSeconds(0);
+    cur_day.setMilliseconds(0);
+
     console.log(boards[0])
     for(let b of boards) {
       let tweet_time = new Date(b.timestamp*1000);
-      if(tweet_time.getDate() != prev_day) { response.write("<br/>" + tweet_time.getFullYear() + '-' + (tweet_time.getMonth() + 1) + '-' + tweet_time.getDate()); }
-      prev_day = tweet_time.getDate();
-
+      while(tweet_time < cur_day) {
+        response.write("<br/>" + cur_day.getFullYear() + '-' + (cur_day.getMonth() + 1) + '-' + cur_day.getDate());
+        cur_day.setDate(cur_day.getDate() - 1);
+      }
       let num_refs = 0;
       for(let type in expected) {
         if(b.id_str == expected[type]) {
