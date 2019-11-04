@@ -1,8 +1,14 @@
 const BigInt = require("big-integer");
 const Promise = require("bluebird");
-const Log = require("log");
+const winston = require("winston");
 
-const log = new Log("info");
+const log = winston.createLogger({
+    level: 'info',
+    transports: [
+              new winston.transports.Console(),
+    ]
+});
+
 
 function parse_score(board) {  
   const score_re = [
@@ -29,14 +35,14 @@ function parse_score(board) {
 
 function parse_clears(board) {
   const clear_re = [
-    RegExp('\\+(\\d+)'),
+    RegExp('\\+(\\d+)', 'g'),
   ]
   
   for(var idx in clear_re) {
-    var re = clear_re[idx];
+    let re = clear_re[idx];
     let total = 0;
-    var matches = re.exec(board);
-    while(matches) {
+    let matches;
+    while((matches = re.exec(board)) !== null) {
       total += parseInt(matches[1].replace(/\D/g,""))
     }
     if(total) { return total; }
@@ -249,10 +255,13 @@ module.exports = class BoardStore {
           }
         })
     } else {
-      log.notice("Saving new tweet " + tweet.id_str);
+      log.info("Saving new tweet " + tweet.id_str);
       return Promise.all([
         self.db.runAsync("INSERT INTO boards VALUES(?,?,?,?,?,?)",tweet.id_str,tweet.text,tweet_timestamp.getTime()/1000,tweet_json,poll_json,(tweet.text.indexOf("◽") > -1))
-          .then(() => this.updateMeta(tweet.id_str)),
+          .then(
+            () => this.updateMeta(tweet.id_str),
+            (err) => log.error("Failed to insert board " + tweet.id_str + ": " + err)
+          ),
         self.db.runAsync("INSERT INTO sampled_data VALUES(?,?,?,?,?)",tweet.id_str,poll_updated.getTime()/1000,poll_json,tweet.retweet_count,tweet.favorite_count)
       ])
     }
@@ -471,10 +480,17 @@ module.exports = class BoardStore {
           //log.debug(rows);
           //let min_id = (order < 0) ? rows[rows.length-1].id : rows[0].id;
           //let max_id = (order < 0) ? rows[0].id : rows[rows.length-1].id;
+          log.debug("Fetched " + rows.length + "  boards, adding...");
           for(var r of rows) {
+            log.silly("Building board...");
+            log.silly(r);
             var cur_board = new Board(r);
+            log.silly("Adding board...");
+            log.silly(opts);
+            log.silly(cur_board);
             if(opts.include_meta || cur_board.score !== null) { boards.push(cur_board) };
           }
+          log.debug("Added " + rows.length + "  boards");
           resolve()
         })
       });
